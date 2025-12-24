@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.analyze-route-ai]
 verify_jwt = false
+
+[functions.get-route-map]
+verify_jwt = false

@@ -1,6 +1,30 @@
-import React from 'react';
-import { CheckCircle, XCircle, AlertTriangle, RefreshCw, MapPin, Fuel, DollarSign, Clock, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { CheckCircle, XCircle, AlertTriangle, RefreshCw, MapPin, Fuel, DollarSign, Clock, TrendingUp, Map, MessageCircle, Lightbulb, AlertCircle, Target } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+
+interface AIAnalysis {
+  viabilityScore: 'high' | 'medium' | 'low';
+  viabilityMessage: string;
+  profitMargin: number;
+  alerts: string[];
+  optimizationTips: string[];
+  marketAnalysis: string;
+  returnAnalysis?: {
+    hasReturnLoad: boolean;
+    estimatedReturnCost: number;
+    recommendation: string;
+  };
+  suggestedFreightValue?: number;
+  summary: string;
+}
+
+interface GeocodedPoint {
+  address: string;
+  lat: number;
+  lng: number;
+}
 
 interface SimulationResult {
   totalDistanceKm: number;
@@ -11,11 +35,17 @@ interface SimulationResult {
   driverCommissionCost: number;
   estimatedMaintenanceCost: number;
   estimatedFixedCost?: number;
+  returnCost?: number;
   totalFreightIncome: number;
   netProfit: number;
   viabilityScore: 'high' | 'medium' | 'low';
   viabilityMessage: string;
   routeSuggestions?: string;
+  aiAnalysis?: AIAnalysis;
+  polyline?: string;
+  geocodedPoints?: GeocodedPoint[];
+  originCity?: string;
+  destinationCity?: string;
 }
 
 interface DashboardScreenProps {
@@ -24,10 +54,11 @@ interface DashboardScreenProps {
 }
 
 const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset }) => {
+  const [mapImageUrl, setMapImageUrl] = useState<string | null>(null);
+  const [mapLoading, setMapLoading] = useState(false);
+
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
-
-  const COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899'];
 
   const chartData = [
     { name: 'Combustível', value: result.estimatedFuelCost, color: '#3b82f6' },
@@ -35,6 +66,7 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset }) =>
     { name: 'Comissão', value: result.driverCommissionCost, color: '#10b981' },
     { name: 'Manutenção', value: result.estimatedMaintenanceCost, color: '#8b5cf6' },
     { name: 'Custos Fixos', value: result.estimatedFixedCost || 0, color: '#ec4899' },
+    ...(result.returnCost ? [{ name: 'Retorno Vazio', value: result.returnCost, color: '#f97316' }] : []),
   ].filter(d => d.value > 0);
 
   const ViabilityIcon = result.viabilityScore === 'high' 
@@ -50,6 +82,85 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset }) =>
   };
 
   const colors = viabilityColors[result.viabilityScore];
+
+  // Fetch map image from edge function
+  useEffect(() => {
+    const fetchMapImage = async () => {
+      if (!result.geocodedPoints || result.geocodedPoints.length < 2) return;
+      
+      setMapLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('get-route-map', {
+          body: {
+            polyline: result.polyline,
+            geocodedPoints: result.geocodedPoints,
+          },
+        });
+
+        if (error) {
+          console.error('Error fetching map:', error);
+          return;
+        }
+
+        // Convert blob to URL
+        if (data instanceof Blob) {
+          const url = URL.createObjectURL(data);
+          setMapImageUrl(url);
+        }
+      } catch (err) {
+        console.error('Failed to fetch map:', err);
+      } finally {
+        setMapLoading(false);
+      }
+    };
+
+    fetchMapImage();
+
+    // Cleanup URL on unmount
+    return () => {
+      if (mapImageUrl) {
+        URL.revokeObjectURL(mapImageUrl);
+      }
+    };
+  }, [result.geocodedPoints, result.polyline]);
+
+  // Build WhatsApp share message
+  const handleShareWhatsApp = () => {
+    const origin = result.originCity || result.geocodedPoints?.[0]?.address || 'Origem';
+    const destination = result.destinationCity || result.geocodedPoints?.[result.geocodedPoints.length - 1]?.address || 'Destino';
+    
+    const viabilityEmoji = result.viabilityScore === 'high' ? '✅' : result.viabilityScore === 'medium' ? '⚠️' : '❌';
+    const viabilityText = result.viabilityScore === 'high' ? 'ALTA' : result.viabilityScore === 'medium' ? 'MÉDIA' : 'BAIXA';
+
+    const message = `🚚 *ANÁLISE DE FRETE - FreteCerto*
+
+📍 *Rota:* ${origin} → ${destination}
+📏 *Distância:* ${result.totalDistanceKm.toLocaleString('pt-BR')} km
+⏱️ *Duração:* ${result.totalDurationDays} dia(s) (${result.totalDurationHours.toFixed(1)}h)
+
+💰 *VALORES:*
+• Frete: ${formatCurrency(result.totalFreightIncome)}
+• Combustível: ${formatCurrency(result.estimatedFuelCost)}
+• Pedágios: ${formatCurrency(result.estimatedTollCost)}
+• Comissão: ${formatCurrency(result.driverCommissionCost)}
+• Manutenção: ${formatCurrency(result.estimatedMaintenanceCost)}
+${result.returnCost ? `• Retorno Vazio: ${formatCurrency(result.returnCost)}` : ''}
+
+${viabilityEmoji} *Viabilidade:* ${viabilityText}
+💵 *Lucro Líquido:* ${formatCurrency(result.netProfit)}
+
+${result.aiAnalysis?.marketAnalysis ? `📊 *Análise de Mercado:* ${result.aiAnalysis.marketAnalysis}` : ''}
+
+_Calculado com FreteCerto - Seu frete mais lucrativo!_`;
+
+    const encodedMessage = encodeURIComponent(message);
+    const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
+    
+    window.open(whatsappUrl, '_blank');
+    toast.success('Abrindo WhatsApp para compartilhar...');
+  };
+
+  
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-[hsl(var(--background))] pb-32">
@@ -71,6 +182,37 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset }) =>
             </div>
           </div>
         </div>
+
+        {/* Route Map */}
+        {(mapImageUrl || mapLoading) && (
+          <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] overflow-hidden">
+            <div className="flex items-center gap-2 p-4 border-b border-[hsl(var(--border))]">
+              <Map size={18} className="text-blue-600" />
+              <span className="font-bold text-[hsl(var(--foreground))]">Rota no Mapa</span>
+            </div>
+            <div className="relative">
+              {mapLoading ? (
+                <div className="w-full h-48 bg-slate-100 flex items-center justify-center">
+                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                </div>
+              ) : mapImageUrl ? (
+                <img 
+                  src={mapImageUrl} 
+                  alt="Mapa da rota" 
+                  className="w-full h-48 object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              ) : null}
+              {result.geocodedPoints && result.geocodedPoints.length >= 2 && (
+                <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-sm font-medium">
+                  {result.geocodedPoints[0]?.address?.split(',')[0]} → {result.geocodedPoints[result.geocodedPoints.length - 1]?.address?.split(',')[0]}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Key Metrics */}
         <div className="grid grid-cols-2 gap-4">
@@ -117,6 +259,60 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset }) =>
             </p>
           </div>
         </div>
+
+        {/* AI Analysis - Alerts */}
+        {result.aiAnalysis?.alerts && result.aiAnalysis.alerts.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-4">
+            <h3 className="font-bold text-red-800 mb-3 flex items-center gap-2">
+              <AlertCircle size={18} />
+              Alertas
+            </h3>
+            <ul className="space-y-2">
+              {result.aiAnalysis.alerts.map((alert, index) => (
+                <li key={index} className="text-sm text-red-700 flex items-start gap-2">
+                  <span className="text-red-500 mt-1">•</span>
+                  {alert}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* AI Analysis - Optimization Tips */}
+        {result.aiAnalysis?.optimizationTips && result.aiAnalysis.optimizationTips.length > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+            <h3 className="font-bold text-amber-800 mb-3 flex items-center gap-2">
+              <Lightbulb size={18} />
+              Dicas de Otimização
+            </h3>
+            <ul className="space-y-2">
+              {result.aiAnalysis.optimizationTips.map((tip, index) => (
+                <li key={index} className="text-sm text-amber-700 flex items-start gap-2">
+                  <span className="text-amber-500 mt-1">💡</span>
+                  {tip}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* AI Analysis - Market Analysis */}
+        {result.aiAnalysis?.marketAnalysis && (
+          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+            <h3 className="font-bold text-blue-800 mb-2 flex items-center gap-2">
+              <Target size={18} />
+              Análise de Mercado
+            </h3>
+            <p className="text-sm text-blue-700">{result.aiAnalysis.marketAnalysis}</p>
+            {result.aiAnalysis.suggestedFreightValue && (
+              <div className="mt-3 pt-3 border-t border-blue-200">
+                <p className="text-sm text-blue-600">
+                  💰 Valor sugerido para este frete: <span className="font-bold">{formatCurrency(result.aiAnalysis.suggestedFreightValue)}</span>
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Cost Breakdown Chart */}
         <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] p-6">
@@ -191,28 +387,41 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset }) =>
               <span className="text-[hsl(var(--muted-foreground))]">Manutenção</span>
               <span className="font-medium">{formatCurrency(result.estimatedMaintenanceCost)}</span>
             </div>
-            <div className="flex justify-between items-center py-2">
+            <div className="flex justify-between items-center py-2 border-b border-[hsl(var(--border))]">
               <span className="text-[hsl(var(--muted-foreground))]">Custos Fixos</span>
               <span className="font-medium">{formatCurrency(result.estimatedFixedCost || 0)}</span>
             </div>
+            {result.returnCost && (
+              <div className="flex justify-between items-center py-2 border-b border-[hsl(var(--border))]">
+                <span className="text-[hsl(var(--muted-foreground))]">Retorno Vazio</span>
+                <span className="font-medium text-amber-600">{formatCurrency(result.returnCost)}</span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Suggestions */}
         {result.routeSuggestions && (
-          <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6">
-            <h3 className="font-bold text-blue-800 mb-2">💡 Sugestões</h3>
-            <p className="text-sm text-blue-700">{result.routeSuggestions}</p>
+          <div className="bg-violet-50 border border-violet-200 rounded-2xl p-6">
+            <h3 className="font-bold text-violet-800 mb-2">✨ Resumo da IA</h3>
+            <p className="text-sm text-violet-700">{result.routeSuggestions}</p>
           </div>
         )}
       </div>
 
-      {/* Bottom Action */}
+      {/* Bottom Actions */}
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-[hsl(var(--border))] p-4 z-50">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-2xl mx-auto flex gap-3">
+          <button
+            onClick={handleShareWhatsApp}
+            className="w-14 h-14 bg-[#25D366] hover:bg-[#20BA5A] text-white rounded-xl shadow-lg flex items-center justify-center transition-all active:scale-[0.98]"
+            title="Compartilhar no WhatsApp"
+          >
+            <MessageCircle size={24} />
+          </button>
           <button
             onClick={onReset}
-            className="w-full bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 text-lg transition-all active:scale-[0.98]"
+            className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 text-lg transition-all active:scale-[0.98]"
           >
             <RefreshCw size={20} />
             Nova Simulação
