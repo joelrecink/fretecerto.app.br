@@ -20,6 +20,7 @@ interface RouteAnalysisRequest {
     netProfit: number;
     originCity: string;
     destinationCity: string;
+    routeSummary?: string; // e.g. "BR-101, SC-430, RS-020"
   };
   vehicleData: {
     axles: number;
@@ -28,6 +29,13 @@ interface RouteAnalysisRequest {
   };
   includeReturn: boolean;
   returnCost?: number;
+}
+
+interface RoadRestriction {
+  road: string;
+  reason: string;
+  severity: 'critical' | 'warning' | 'info';
+  alternative?: string;
 }
 
 interface AIAnalysis {
@@ -44,6 +52,7 @@ interface AIAnalysis {
   };
   suggestedFreightValue?: number;
   summary: string;
+  roadRestrictions?: RoadRestriction[];
 }
 
 serve(async (req) => {
@@ -135,6 +144,15 @@ Analise os dados da viagem e forneça uma avaliação completa considerando:
 2. OTIMIZAÇÃO: Sugira formas de reduzir custos (combustível, pedágios, horários)
 3. ANÁLISE DE MERCADO: Compare com valores médios do mercado para a região/distância
 4. RETORNO: Se não há carga de retorno, avalie o impacto no custo total
+5. RESTRIÇÕES DE ESTRADAS: Identifique trechos perigosos ou proibidos para o tamanho do veículo
+
+IMPORTANTE - RESTRIÇÕES POR EIXOS:
+- Veículos com 6+ eixos: evitar Serra do Rio do Rastro (SC-430), Serra do Corvo Branco (SC-370), Serra das Araras
+- Veículos com 7+ eixos: evitar Via Anchieta (subida), Serra de Petrópolis, trechos íngremes da BR-040
+- Veículos com 8+ eixos: evitar praticamente todas as serras e declives acentuados
+- Considere também: peso bruto, restrições de horário, e regulamentações locais
+
+Analise a rota informada (origem → destino) e identifique se passa por algum desses trechos problemáticos.
 
 Responda APENAS em JSON válido com a seguinte estrutura:
 {
@@ -150,7 +168,15 @@ Responda APENAS em JSON válido com a seguinte estrutura:
     "recommendation": "recomendação sobre retorno"
   },
   "suggestedFreightValue": número sugerido para o frete,
-  "summary": "resumo executivo da análise"
+  "summary": "resumo executivo da análise",
+  "roadRestrictions": [
+    {
+      "road": "nome da estrada/trecho",
+      "reason": "motivo da restrição",
+      "severity": "critical" | "warning" | "info",
+      "alternative": "rota alternativa sugerida (opcional)"
+    }
+  ]
 }`;
 
     const userPrompt = `Analise esta viagem de frete:
@@ -160,6 +186,7 @@ ROTA:
 - Destino: ${routeData.destinationCity}
 - Distância: ${routeData.totalDistanceKm} km
 - Duração: ${routeData.totalDurationHours.toFixed(1)} horas (${routeData.totalDurationDays} dias)
+${routeData.routeSummary ? `- Resumo da rota: ${routeData.routeSummary}` : ''}
 
 CUSTOS:
 - Combustível: R$ ${routeData.estimatedFuelCost.toFixed(2)}
@@ -183,6 +210,13 @@ VEÍCULO:
 RETORNO:
 - Incluir custo de retorno: ${includeReturn ? 'SIM' : 'NÃO'}
 ${includeReturn ? `- Custo estimado de retorno: R$ ${(returnCost || 0).toFixed(2)}` : ''}
+
+ANÁLISE DE RESTRIÇÕES:
+Considerando que o veículo possui ${vehicleData.axles} eixos, identifique se a rota entre ${routeData.originCity} e ${routeData.destinationCity} passa por trechos perigosos ou proibidos para este tipo de veículo. Inclua na sua análise:
+- Serras e declives acentuados
+- Estradas com restrição de peso/tamanho
+- Trechos conhecidos por acidentes com veículos pesados
+- Alternativas mais seguras se aplicável
 
 Forneça sua análise completa em JSON.`;
 
