@@ -1,6 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import Stripe from 'https://esm.sh/stripe@14.21.0';
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.2';
+import Stripe from 'https://esm.sh/stripe@18.5.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -46,16 +46,27 @@ serve(async (req) => {
       throw new Error('Package ID is required');
     }
 
+    // Use service role for package lookup to bypass RLS
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
     // Get package details
-    const { data: packageData, error: packageError } = await supabaseClient
+    const { data: packageData, error: packageError } = await supabaseAdmin
       .from('credit_packages')
       .select('*')
       .eq('id', packageId)
       .eq('is_active', true)
-      .single();
+      .maybeSingle();
 
-    if (packageError || !packageData) {
-      console.error('Package not found:', packageError);
+    if (packageError) {
+      console.error('Package query error:', packageError);
+      throw new Error('Error fetching package');
+    }
+
+    if (!packageData) {
+      console.error('Package not found for id:', packageId);
       throw new Error('Package not found');
     }
 
@@ -68,7 +79,7 @@ serve(async (req) => {
     }
 
     const stripe = new Stripe(stripeKey, {
-      apiVersion: '2023-10-16',
+      apiVersion: '2025-08-27.basil',
     });
 
     // Check if customer exists
@@ -93,14 +104,10 @@ serve(async (req) => {
     console.log('Stripe customer:', customerId);
 
     // Create Stripe Checkout Session
-    // Note: PIX requires enabling in Stripe dashboard for Brazilian accounts
-    // Using automatic payment methods to let Stripe show available methods
-    const origin = req.headers.get('origin') || 'http://localhost:8080';
+    const origin = req.headers.get('origin') || 'https://mfwqlhmxojxbikfhqeaw.supabase.co';
     
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      // Let Stripe automatically determine available payment methods
-      // To enable PIX, activate it in: https://dashboard.stripe.com/account/payments/settings
       line_items: [
         {
           price_data: {
@@ -131,13 +138,13 @@ serve(async (req) => {
           credits: packageData.credits.toString(),
         },
       },
-      expires_at: Math.floor(Date.now() / 1000) + 1800, // 30 min expiration for PIX
+      expires_at: Math.floor(Date.now() / 1000) + 1800, // 30 min expiration
     });
 
-    console.log('Checkout session created:', session.id);
+    console.log('Checkout session created:', session.id, 'URL:', session.url);
 
-    // Record pending transaction
-    await supabaseClient.from('credit_transactions').insert({
+    // Record pending transaction using admin client
+    const { error: insertError } = await supabaseAdmin.from('credit_transactions').insert({
       user_id: user.id,
       amount: packageData.credits,
       type: 'purchase',
@@ -147,6 +154,11 @@ serve(async (req) => {
       package_price_cents: packageData.price_cents,
       status: 'pending',
     });
+
+    if (insertError) {
+      console.error('Error recording pending transaction:', insertError);
+      // Don't throw - the checkout was created successfully
+    }
 
     return new Response(JSON.stringify({ 
       url: session.url,
