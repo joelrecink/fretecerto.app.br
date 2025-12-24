@@ -626,7 +626,7 @@ const Index = () => {
           onBack={() => setStep('delivery')}
           onEditVehicle={() => setStep('operational')}
           loading={calculating || routeLoading}
-          userCredits={userCredits}
+          userCredits={userCredits.total}
           isLoggedIn={!!user}
         />
       )}

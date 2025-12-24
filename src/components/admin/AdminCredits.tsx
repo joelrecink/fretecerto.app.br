@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Coins, Package, Plus, Edit2, Trash2, Save, X, Key, Settings } from 'lucide-react';
+import { Coins, Package, Plus, Edit2, Trash2, Save, X, Settings, Users, Gift, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -13,12 +13,21 @@ interface CreditPackage {
   sort_order: number;
 }
 
-interface PixConfig {
+interface SystemSetting {
   id: string;
-  pix_key: string;
-  pix_key_type: 'cpf' | 'cnpj' | 'email' | 'phone' | 'random';
-  beneficiary_name: string;
-  is_active: boolean;
+  key: string;
+  value: string;
+  description: string | null;
+}
+
+interface UserCredit {
+  id: string;
+  user_id: string;
+  balance: number;
+  free_credits: number;
+  free_credits_last_reset: string | null;
+  email?: string;
+  full_name?: string;
 }
 
 interface CreditTransaction {
@@ -39,16 +48,18 @@ interface AdminCreditsProps {
 
 const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
   const [packages, setPackages] = useState<CreditPackage[]>([]);
-  const [pixConfig, setPixConfig] = useState<PixConfig | null>(null);
+  const [settings, setSettings] = useState<SystemSetting[]>([]);
+  const [userCredits, setUserCredits] = useState<UserCredit[]>([]);
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [subTab, setSubTab] = useState<'packages' | 'pix' | 'transactions'>('transactions');
+  const [subTab, setSubTab] = useState<'users' | 'packages' | 'settings' | 'transactions'>('users');
   
   // Edit states
   const [editingPackage, setEditingPackage] = useState<CreditPackage | null>(null);
   const [newPackage, setNewPackage] = useState<Partial<CreditPackage> | null>(null);
-  const [editingPix, setEditingPix] = useState(false);
-  const [pixForm, setPixForm] = useState<Partial<PixConfig>>({});
+  const [userSearchTerm, setUserSearchTerm] = useState('');
+  const [addCreditsModal, setAddCreditsModal] = useState<{ userId: string; userName: string } | null>(null);
+  const [creditsToAdd, setCreditsToAdd] = useState({ premium: 0, free: 0 });
 
   useEffect(() => {
     fetchData();
@@ -57,18 +68,33 @@ const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
   const fetchData = async () => {
     setLoading(true);
     
-    const [packagesRes, pixRes, transactionsRes] = await Promise.all([
+    const [packagesRes, settingsRes, creditsRes, transactionsRes] = await Promise.all([
       supabase.from('credit_packages').select('*').order('sort_order'),
-      supabase.from('pix_config').select('*').eq('is_active', true).single(),
+      supabase.from('system_settings').select('*'),
+      supabase.from('user_credits').select('*'),
       supabase.from('credit_transactions').select('*').order('created_at', { ascending: false }).limit(100),
     ]);
 
     setPackages((packagesRes.data as CreditPackage[]) || []);
-    setPixConfig((pixRes.data as PixConfig) || null);
+    setSettings((settingsRes.data as SystemSetting[]) || []);
     setTransactions((transactionsRes.data as CreditTransaction[]) || []);
     
-    if (pixRes.data) {
-      setPixForm(pixRes.data as PixConfig);
+    // Fetch user emails for credits
+    if (creditsRes.data && creditsRes.data.length > 0) {
+      const userIds = creditsRes.data.map((c: UserCredit) => c.user_id);
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('user_id, full_name')
+        .in('user_id', userIds);
+      
+      const profileMap = new Map(profiles?.map(p => [p.user_id, p.full_name]) || []);
+      
+      setUserCredits(creditsRes.data.map((c: UserCredit) => ({
+        ...c,
+        full_name: profileMap.get(c.user_id) || 'Usuário'
+      })));
+    } else {
+      setUserCredits([]);
     }
     
     setLoading(false);
@@ -79,6 +105,22 @@ const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
       style: 'currency',
       currency: 'BRL',
     }).format(cents / 100);
+  };
+
+  const getSetting = (key: string) => settings.find(s => s.key === key)?.value || '';
+  
+  const updateSetting = async (key: string, value: string) => {
+    const { error } = await supabase
+      .from('system_settings')
+      .update({ value })
+      .eq('key', key);
+    
+    if (error) {
+      toast.error('Erro ao atualizar configuração');
+    } else {
+      toast.success('Configuração atualizada');
+      fetchData();
+    }
   };
 
   // Package handlers
@@ -134,45 +176,73 @@ const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
     }
   };
 
-  // PIX handlers
-  const handleSavePix = async () => {
-    if (!pixForm.pix_key || !pixForm.pix_key_type || !pixForm.beneficiary_name) {
-      toast.error('Preencha todos os campos');
-      return;
+  // User credit handlers
+  const handleAddCredits = async () => {
+    if (!addCreditsModal) return;
+    
+    const { error } = await supabase
+      .from('user_credits')
+      .update({ 
+        balance: supabase.rpc ? undefined : undefined,
+      })
+      .eq('user_id', addCreditsModal.userId);
+    
+    // Use direct update for simplicity
+    const currentUser = userCredits.find(u => u.user_id === addCreditsModal.userId);
+    if (currentUser) {
+      const { error: updateError } = await supabase
+        .from('user_credits')
+        .update({ 
+          balance: currentUser.balance + creditsToAdd.premium,
+          free_credits: currentUser.free_credits + creditsToAdd.free
+        })
+        .eq('user_id', addCreditsModal.userId);
+      
+      if (updateError) {
+        toast.error('Erro ao adicionar créditos');
+      } else {
+        // Record transaction if adding premium credits
+        if (creditsToAdd.premium > 0) {
+          await supabase.from('credit_transactions').insert({
+            user_id: addCreditsModal.userId,
+            amount: creditsToAdd.premium,
+            type: 'bonus',
+            description: 'Créditos adicionados pelo administrador',
+            status: 'completed'
+          });
+        }
+        
+        toast.success('Créditos adicionados com sucesso');
+        setAddCreditsModal(null);
+        setCreditsToAdd({ premium: 0, free: 0 });
+        fetchData();
+      }
     }
+  };
 
-    // Deactivate existing config
-    if (pixConfig) {
-      await supabase.from('pix_config').update({ is_active: false }).eq('id', pixConfig.id);
-    }
-
-    // Create new config
-    const { error } = await supabase.from('pix_config').insert({
-      pix_key: pixForm.pix_key,
-      pix_key_type: pixForm.pix_key_type,
-      beneficiary_name: pixForm.beneficiary_name,
-      is_active: true,
-    });
-
+  const handleResetFreeCredits = async (userId: string) => {
+    const dailyAmount = parseInt(getSetting('daily_free_credits')) || 1;
+    
+    const { error } = await supabase
+      .from('user_credits')
+      .update({ 
+        free_credits: dailyAmount,
+        free_credits_last_reset: new Date().toISOString()
+      })
+      .eq('user_id', userId);
+    
     if (error) {
-      toast.error('Erro ao salvar configuração PIX');
+      toast.error('Erro ao resetar créditos');
     } else {
-      toast.success('Configuração PIX salva com segurança');
-      setEditingPix(false);
+      toast.success('Créditos gratuitos resetados');
       fetchData();
     }
   };
 
-  const maskPixKey = (key: string, type: string) => {
-    if (type === 'cpf') return key.replace(/(\d{3})\d{5}(\d{3})/, '$1*****$2');
-    if (type === 'cnpj') return key.replace(/(\d{2})\d{6}(\d{4})/, '$1******$2');
-    if (type === 'email') {
-      const [name, domain] = key.split('@');
-      return `${name.slice(0, 2)}***@${domain}`;
-    }
-    if (type === 'phone') return key.replace(/(\d{2})\d{5}(\d{4})/, '($1)*****-$2');
-    return key.slice(0, 8) + '***';
-  };
+  const filteredUsers = userCredits.filter(u => 
+    u.full_name?.toLowerCase().includes(userSearchTerm.toLowerCase()) ||
+    u.user_id.toLowerCase().includes(userSearchTerm.toLowerCase())
+  );
 
   if (loading) {
     return (
@@ -186,6 +256,15 @@ const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
     <div className="space-y-4">
       {/* Sub-tabs */}
       <div className="flex gap-2 mb-4 flex-wrap">
+        <button
+          onClick={() => setSubTab('users')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+            subTab === 'users' ? 'bg-amber-100 text-amber-700' : 'bg-white text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <Users size={18} />
+          Usuários
+        </button>
         <button
           onClick={() => setSubTab('transactions')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -205,15 +284,149 @@ const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
           Pacotes
         </button>
         <button
-          onClick={() => setSubTab('pix')}
+          onClick={() => setSubTab('settings')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-            subTab === 'pix' ? 'bg-amber-100 text-amber-700' : 'bg-white text-gray-600 hover:bg-gray-100'
+            subTab === 'settings' ? 'bg-amber-100 text-amber-700' : 'bg-white text-gray-600 hover:bg-gray-100'
           }`}
         >
-          <Key size={18} />
-          Configuração PIX
+          <Settings size={18} />
+          Configurações
         </button>
       </div>
+
+      {/* Users Tab */}
+      {subTab === 'users' && (
+        <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] overflow-hidden">
+          <div className="p-4 border-b flex justify-between items-center gap-4">
+            <h3 className="font-semibold">Créditos por Usuário</h3>
+            <div className="relative flex-1 max-w-xs">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={userSearchTerm}
+                onChange={(e) => setUserSearchTerm(e.target.value)}
+                placeholder="Buscar usuário..."
+                className="w-full pl-9 pr-4 py-2 border rounded-lg text-sm"
+              />
+            </div>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-[hsl(var(--secondary))]">
+                <tr>
+                  <th className="text-left p-3 text-sm font-semibold">Usuário</th>
+                  <th className="text-left p-3 text-sm font-semibold">Premium</th>
+                  <th className="text-left p-3 text-sm font-semibold">Gratuitos</th>
+                  <th className="text-left p-3 text-sm font-semibold">Total</th>
+                  <th className="text-left p-3 text-sm font-semibold">Último Reset</th>
+                  <th className="text-left p-3 text-sm font-semibold">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredUsers.map((user) => (
+                  <tr key={user.id} className="border-t">
+                    <td className="p-3">
+                      <div className="font-medium">{user.full_name || 'Usuário'}</div>
+                      <div className="text-xs text-gray-500">{user.user_id.slice(0, 8)}...</div>
+                    </td>
+                    <td className="p-3">
+                      <span className="font-medium text-amber-600">{user.balance}</span>
+                    </td>
+                    <td className="p-3">
+                      <span className="font-medium text-emerald-600">{user.free_credits}</span>
+                    </td>
+                    <td className="p-3">
+                      <span className="font-bold">{user.balance + user.free_credits}</span>
+                    </td>
+                    <td className="p-3 text-sm text-gray-500">
+                      {user.free_credits_last_reset 
+                        ? format(new Date(user.free_credits_last_reset), 'dd/MM/yyyy HH:mm')
+                        : '-'
+                      }
+                    </td>
+                    <td className="p-3">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setAddCreditsModal({ userId: user.user_id, userName: user.full_name || 'Usuário' })}
+                          className="flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 rounded text-xs hover:bg-amber-200"
+                        >
+                          <Plus size={12} />
+                          Adicionar
+                        </button>
+                        <button
+                          onClick={() => handleResetFreeCredits(user.user_id)}
+                          className="flex items-center gap-1 px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-xs hover:bg-emerald-200"
+                        >
+                          <Gift size={12} />
+                          Reset Diário
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {filteredUsers.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-gray-500">
+                      Nenhum usuário encontrado
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Tab */}
+      {subTab === 'settings' && (
+        <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] overflow-hidden">
+          <div className="p-4 border-b">
+            <h3 className="font-semibold flex items-center gap-2">
+              <Settings size={18} className="text-amber-600" />
+              Configurações de Créditos
+            </h3>
+          </div>
+          
+          <div className="p-4 space-y-6">
+            <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+              <div>
+                <h4 className="font-medium">Créditos Gratuitos Diários</h4>
+                <p className="text-sm text-gray-500">Habilitar/desabilitar créditos gratuitos diários para todos os usuários</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={getSetting('daily_free_credits_enabled') === 'true'}
+                  onChange={(e) => updateSetting('daily_free_credits_enabled', e.target.checked ? 'true' : 'false')}
+                  className="sr-only peer"
+                />
+                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-amber-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-amber-500"></div>
+              </label>
+            </div>
+            
+            <div className="p-4 bg-gray-50 rounded-xl">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h4 className="font-medium">Quantidade de Créditos Diários</h4>
+                  <p className="text-sm text-gray-500">Quantos créditos gratuitos cada usuário recebe por dia</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4">
+                <input
+                  type="number"
+                  min="0"
+                  max="10"
+                  value={getSetting('daily_free_credits') || '1'}
+                  onChange={(e) => updateSetting('daily_free_credits', e.target.value)}
+                  className="w-24 px-4 py-2 border rounded-lg text-center font-medium"
+                />
+                <span className="text-gray-500">créditos por dia</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Packages Tab */}
       {subTab === 'packages' && (
@@ -276,126 +489,6 @@ const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
                 </div>
               )
             ))}
-          </div>
-        </div>
-      )}
-
-      {/* PIX Config Tab */}
-      {subTab === 'pix' && (
-        <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] overflow-hidden">
-          <div className="p-4 border-b">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Key size={18} className="text-amber-600" />
-              Configuração da Conta PIX (Backup)
-            </h3>
-            <p className="text-sm text-[hsl(var(--muted-foreground))] mt-1">
-              Configuração de backup. O pagamento principal é processado via Stripe.
-            </p>
-          </div>
-
-          <div className="p-4">
-            {!editingPix && pixConfig ? (
-              <div className="space-y-4">
-                <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                  <div className="flex items-center gap-2 text-green-700 font-medium mb-2">
-                    <Settings size={18} />
-                    PIX Configurado
-                  </div>
-                  <div className="grid gap-2 text-sm">
-                    <div>
-                      <span className="text-gray-500">Beneficiário:</span>{' '}
-                      <span className="font-medium">{pixConfig.beneficiary_name}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Tipo de Chave:</span>{' '}
-                      <span className="font-medium uppercase">{pixConfig.pix_key_type}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-500">Chave (mascarada):</span>{' '}
-                      <span className="font-medium">{maskPixKey(pixConfig.pix_key, pixConfig.pix_key_type)}</span>
-                    </div>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setPixForm(pixConfig);
-                    setEditingPix(true);
-                  }}
-                  className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
-                >
-                  <Edit2 size={16} />
-                  Alterar Configuração
-                </button>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-amber-800 text-sm">
-                  <strong>⚠️ Segurança:</strong> A chave PIX será armazenada de forma segura no banco de dados com acesso restrito apenas a administradores.
-                </div>
-
-                <div className="grid gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Nome do Beneficiário</label>
-                    <input
-                      type="text"
-                      value={pixForm.beneficiary_name || ''}
-                      onChange={(e) => setPixForm({ ...pixForm, beneficiary_name: e.target.value })}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-                      placeholder="Nome completo ou razão social"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Tipo de Chave PIX</label>
-                    <select
-                      value={pixForm.pix_key_type || ''}
-                      onChange={(e) => setPixForm({ ...pixForm, pix_key_type: e.target.value as PixConfig['pix_key_type'] })}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-                    >
-                      <option value="">Selecione...</option>
-                      <option value="cpf">CPF</option>
-                      <option value="cnpj">CNPJ</option>
-                      <option value="email">E-mail</option>
-                      <option value="phone">Telefone</option>
-                      <option value="random">Chave Aleatória</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Chave PIX</label>
-                    <input
-                      type="text"
-                      value={pixForm.pix_key || ''}
-                      onChange={(e) => setPixForm({ ...pixForm, pix_key: e.target.value })}
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none"
-                      placeholder="Digite a chave PIX"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2">
-                  <button
-                    onClick={handleSavePix}
-                    className="flex items-center gap-2 px-4 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
-                  >
-                    <Save size={16} />
-                    Salvar Configuração
-                  </button>
-                  {pixConfig && (
-                    <button
-                      onClick={() => {
-                        setEditingPix(false);
-                        setPixForm(pixConfig);
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-                    >
-                      <X size={16} />
-                      Cancelar
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -465,6 +558,60 @@ const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
                   ))}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* Add Credits Modal */}
+      {addCreditsModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <h3 className="text-lg font-semibold mb-4">Adicionar Créditos</h3>
+            <p className="text-gray-600 mb-4">Usuário: <strong>{addCreditsModal.userName}</strong></p>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Créditos Premium</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={creditsToAdd.premium}
+                  onChange={(e) => setCreditsToAdd({ ...creditsToAdd, premium: parseInt(e.target.value) || 0 })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+                <p className="text-xs text-gray-500 mt-1">Créditos comprados, não expiram</p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium mb-1">Créditos Gratuitos</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={creditsToAdd.free}
+                  onChange={(e) => setCreditsToAdd({ ...creditsToAdd, free: parseInt(e.target.value) || 0 })}
+                  className="w-full px-4 py-2 border rounded-lg"
+                />
+                <p className="text-xs text-gray-500 mt-1">Resetam diariamente</p>
+              </div>
+            </div>
+            
+            <div className="flex gap-2 mt-6">
+              <button
+                onClick={handleAddCredits}
+                className="flex-1 py-2 bg-amber-500 text-white rounded-lg hover:bg-amber-600 font-medium"
+              >
+                Adicionar
+              </button>
+              <button
+                onClick={() => {
+                  setAddCreditsModal(null);
+                  setCreditsToAdd({ premium: 0, free: 0 });
+                }}
+                className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+              >
+                Cancelar
+              </button>
+            </div>
           </div>
         </div>
       )}
