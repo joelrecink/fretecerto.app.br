@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, RefreshCw, MapPin, Fuel, DollarSign, Clock, TrendingUp, Map, MessageCircle, Lightbulb, AlertCircle, Target } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, RefreshCw, MapPin, Fuel, DollarSign, Clock, TrendingUp, Map, MessageCircle, Lightbulb, AlertCircle, Target, Truck } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
@@ -26,6 +26,12 @@ interface GeocodedPoint {
   lng: number;
 }
 
+interface VehicleRestrictions {
+  axles: number;
+  warnings: string[];
+  avoidedRoads: string[];
+}
+
 interface SimulationResult {
   totalDistanceKm: number;
   totalDurationHours: number;
@@ -46,6 +52,7 @@ interface SimulationResult {
   geocodedPoints?: GeocodedPoint[];
   originCity?: string;
   destinationCity?: string;
+  vehicleRestrictions?: VehicleRestrictions;
 }
 
 interface DashboardScreenProps {
@@ -182,6 +189,30 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
             </div>
           </div>
         </div>
+
+        {/* Vehicle Restrictions Warning */}
+        {result.vehicleRestrictions?.warnings && result.vehicleRestrictions.warnings.length > 0 && (
+          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4">
+            <h3 className="font-bold text-orange-800 mb-3 flex items-center gap-2">
+              <Truck size={18} />
+              Restrições do Veículo ({result.vehicleRestrictions.axles} eixos)
+            </h3>
+            <ul className="space-y-2">
+              {result.vehicleRestrictions.warnings.map((warning, index) => (
+                <li key={index} className="text-sm text-orange-700 flex items-start gap-2">
+                  {warning}
+                </li>
+              ))}
+            </ul>
+            {result.vehicleRestrictions.avoidedRoads.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-orange-200">
+                <p className="text-xs text-orange-600">
+                  🛣️ Trechos considerados: {result.vehicleRestrictions.avoidedRoads.join(', ')}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Route Map */}
         {(mapImageUrl || mapLoading) && (

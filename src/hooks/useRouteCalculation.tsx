@@ -30,6 +30,11 @@ interface RouteCalculationResult {
     southwest: { lat: number; lng: number };
   };
   summary?: string;
+  vehicleRestrictions?: {
+    axles: number;
+    warnings: string[];
+    avoidedRoads: string[];
+  };
 }
 
 interface UseRouteCalculationReturn {
@@ -102,6 +107,7 @@ export const useRouteCalculation = (): UseRouteCalculationReturn => {
         geocodedPoints: data.geocodedPoints,
         bounds: data.bounds,
         summary: data.summary,
+        vehicleRestrictions: data.vehicleRestrictions,
       };
 
       setResult(calculationResult);
