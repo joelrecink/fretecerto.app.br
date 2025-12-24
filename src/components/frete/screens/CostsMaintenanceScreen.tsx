@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import { Wrench, Car, CircleDollarSign, Droplets, Users, Shield, ArrowLeft, ArrowRight, Check, Cog, Filter } from 'lucide-react';
+import { Wrench, Car, Droplets, Shield, ArrowLeft, ArrowRight, Check, Cog, Save, ChevronDown, Loader2, Filter, CircleDollarSign, Users } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
+import type { SavedVehicle } from '@/hooks/useVehicles';
 
 interface CostsData {
   licensePlate?: string;
+  modelName?: string;
   assetValue?: number;
   annualDepreciationRate?: number;
   insuranceYearly?: number;
@@ -52,6 +56,9 @@ interface CostsMaintenanceScreenProps {
   onUpdate: (field: string, value: number | string | boolean) => void;
   onNext: () => void;
   onBack: () => void;
+  vehicles?: SavedVehicle[];
+  onSelectVehicle?: (vehicle: SavedVehicle) => void;
+  onSaveVehicle?: () => Promise<void>;
 }
 
 const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
@@ -59,9 +66,15 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
   onUpdate,
   onNext,
   onBack,
+  vehicles = [],
+  onSelectVehicle,
+  onSaveVehicle,
 }) => {
+  const { user } = useAuth();
   const [tireMode, setTireMode] = useState<'new' | 'remold'>('new');
   const [oilSection, setOilSection] = useState<'engine' | 'transmission'>('engine');
+  const [vehicleDropdownOpen, setVehicleDropdownOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const handleInputChange = (field: string, value: string) => {
     const numValue = parseFloat(value.replace(',', '.')) || 0;
@@ -71,6 +84,33 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
   const formatCurrency = (val: number | undefined) => {
     if (!val) return 'R$ 0,00';
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  };
+
+  const handleSave = async () => {
+    if (!user) {
+      toast.error('Faça login para salvar veículos');
+      return;
+    }
+    if (!data.licensePlate) {
+      toast.error('Informe a placa do veículo');
+      return;
+    }
+    if (onSaveVehicle) {
+      setSaving(true);
+      try {
+        await onSaveVehicle();
+      } finally {
+        setSaving(false);
+      }
+    }
+  };
+
+  const handleSelectVehicle = (vehicle: SavedVehicle) => {
+    if (onSelectVehicle) {
+      onSelectVehicle(vehicle);
+      toast.success(`Veículo ${vehicle.license_plate} carregado!`);
+    }
+    setVehicleDropdownOpen(false);
   };
 
   // Calculate tire cost per km
@@ -128,17 +168,83 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
             </div>
           </div>
 
+          {/* Vehicle Selector - Show only if user is logged in */}
+          {user && vehicles.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setVehicleDropdownOpen(!vehicleDropdownOpen)}
+                className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-gradient-to-r from-emerald-50 to-blue-50 rounded-xl border-2 border-emerald-200 hover:border-emerald-400 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Car size={18} className="text-emerald-600" />
+                  <span className="font-medium text-[hsl(var(--foreground))]">
+                    {data.licensePlate || 'Selecionar veículo salvo'}
+                  </span>
+                </div>
+                <ChevronDown size={18} className={`text-[hsl(var(--muted-foreground))] transition-transform ${vehicleDropdownOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {vehicleDropdownOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setVehicleDropdownOpen(false)} />
+                  <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-[hsl(var(--border))] shadow-lg z-50 max-h-64 overflow-auto">
+                    {vehicles.map((v) => (
+                      <button
+                        key={v.id}
+                        onClick={() => handleSelectVehicle(v)}
+                        className={`w-full flex items-center justify-between px-4 py-3 hover:bg-[hsl(var(--secondary))] transition-colors ${
+                          v.license_plate === data.licensePlate ? 'bg-blue-50' : ''
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                            <Car size={16} className="text-blue-600" />
+                          </div>
+                          <div className="text-left">
+                            <p className="font-semibold text-[hsl(var(--foreground))]">{v.license_plate}</p>
+                            {v.model_name && (
+                              <p className="text-xs text-[hsl(var(--muted-foreground))]">{v.model_name}</p>
+                            )}
+                          </div>
+                        </div>
+                        {v.license_plate === data.licensePlate && (
+                          <Check size={18} className="text-emerald-600" />
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-[hsl(var(--foreground))]">
               Placa do Veículo (Obrigatório)
             </label>
-            <input
-              type="text"
-              value={data.licensePlate || ''}
-              onChange={(e) => onUpdate('licensePlate', e.target.value.toUpperCase())}
-              placeholder="ABC-1234"
-              className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all uppercase"
-            />
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={data.licensePlate || ''}
+                onChange={(e) => onUpdate('licensePlate', e.target.value.toUpperCase())}
+                placeholder="ABC-1234"
+                className="flex-1 px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all uppercase"
+              />
+              {user && data.licensePlate && (
+                <button
+                  onClick={handleSave}
+                  disabled={saving}
+                  className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium flex items-center gap-2 transition-colors disabled:opacity-50"
+                >
+                  {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                </button>
+              )}
+            </div>
+            {user && (
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">
+                💾 Salve os dados para carregar automaticamente em futuras viagens
+              </p>
+            )}
           </div>
 
           {/* Hodômetro */}

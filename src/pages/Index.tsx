@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, LogOut, Car, History } from 'lucide-react';
+import { User, LogOut } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { useVehicles } from '@/hooks/useVehicles';
+import { useVehicles, SavedVehicle } from '@/hooks/useVehicles';
 import { useTripHistory } from '@/hooks/useTripHistory';
 import IdentificationScreen from '@/components/frete/screens/IdentificationScreen';
 import OperationalScreen from '@/components/frete/screens/OperationalScreen';
@@ -17,6 +17,7 @@ type AppStep = 'identification' | 'operational' | 'costs' | 'pickup' | 'delivery
 interface VehicleData {
   driverName: string;
   licensePlate?: string;
+  modelName?: string;
   fuelConsumption: number;
   fuelPrice: number;
   axles: number;
@@ -29,18 +30,23 @@ interface VehicleData {
   annualDepreciationRate?: number;
   insuranceYearly?: number;
   registrationYearly?: number;
+  currentOdometer?: number;
+  // Tire References
   refTirePriceNew?: number;
   refTireLifespanNew?: number;
   refTirePriceRemold?: number;
   refTireLifespanRemold?: number;
+  // Tire Quantities
   tireSteerQtyNew?: number;
   tireSteerQtyRemold?: number;
   tireDriveQtyNew?: number;
   tireDriveQtyRemold?: number;
   tireTrailerQtyNew?: number;
   tireTrailerQtyRemold?: number;
+  // Engine Oil
   lastOilChangeCost?: number;
   oilChangeIntervalKm?: number;
+  // Filters
   lastFilterChangeCost?: number;
   filterChangeIntervalKm?: number;
 }
@@ -81,11 +87,12 @@ const DEFAULT_VEHICLE: VehicleData = {
 const Index = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading, signOut } = useAuth();
-  const { vehicles, saveVehicle } = useVehicles();
+  const { vehicles, saveVehicle, updateVehicle } = useVehicles();
   const { saveTrip } = useTripHistory();
 
   const [step, setStep] = useState<AppStep>('identification');
   const [vehicle, setVehicle] = useState<VehicleData>(DEFAULT_VEHICLE);
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string | null>(null);
   const [pickups, setPickups] = useState<RoutePoint[]>([{ id: '1', address: '', value: 0, weight: 0 }]);
   const [deliveries, setDeliveries] = useState<RoutePoint[]>([{ id: '1', address: '', value: 0 }]);
   const [result, setResult] = useState<SimulationResult | null>(null);
@@ -98,28 +105,61 @@ const Index = () => {
     }
   }, [user]);
 
+  // Function to load vehicle data from SavedVehicle
+  const loadVehicleData = useCallback((v: SavedVehicle) => {
+    setSelectedVehicleId(v.id);
+    setVehicle(prev => ({
+      ...prev,
+      licensePlate: v.license_plate,
+      modelName: v.model_name || undefined,
+      fuelConsumption: v.fuel_consumption,
+      fuelPrice: v.fuel_price,
+      axles: v.axles,
+      cargoCapacity: v.cargo_capacity,
+      drivingHoursPerDay: v.driving_hours_per_day || 9,
+      driverCommissionPercentage: v.driver_commission_percentage || 10,
+      driverSalaryMonthly: v.driver_salary_monthly || undefined,
+      driverSalaryInclude13th: v.driver_salary_include_13th ?? true,
+      assetValue: v.asset_value || undefined,
+      annualDepreciationRate: v.annual_depreciation_rate || undefined,
+      insuranceYearly: v.insurance_yearly || undefined,
+      registrationYearly: v.registration_yearly || undefined,
+      currentOdometer: v.current_odometer || undefined,
+      // Tire References
+      refTirePriceNew: v.ref_tire_price_new || undefined,
+      refTireLifespanNew: v.ref_tire_lifespan_new || undefined,
+      refTirePriceRemold: v.ref_tire_price_remold || undefined,
+      refTireLifespanRemold: v.ref_tire_lifespan_remold || undefined,
+      // Tire Quantities
+      tireSteerQtyNew: v.tire_steer_qty_new || undefined,
+      tireSteerQtyRemold: v.tire_steer_qty_remold || undefined,
+      tireDriveQtyNew: v.tire_drive_qty_new || undefined,
+      tireDriveQtyRemold: v.tire_drive_qty_remold || undefined,
+      tireTrailerQtyNew: v.tire_trailer_qty_new || undefined,
+      tireTrailerQtyRemold: v.tire_trailer_qty_remold || undefined,
+      // Engine Oil
+      lastOilChangeCost: v.last_oil_change_cost || undefined,
+      oilChangeIntervalKm: v.oil_change_interval_km || undefined,
+      // Filters
+      lastFilterChangeCost: v.last_filter_change_cost || undefined,
+      filterChangeIntervalKm: v.filter_change_interval_km || undefined,
+    }));
+  }, []);
+
   // Load first saved vehicle if available
   useEffect(() => {
     if (vehicles.length > 0 && !vehicle.licensePlate) {
-      const v = vehicles[0];
-      setVehicle(prev => ({
-        ...prev,
-        licensePlate: v.license_plate,
-        fuelConsumption: v.fuel_consumption,
-        fuelPrice: v.fuel_price,
-        axles: v.axles,
-        cargoCapacity: v.cargo_capacity,
-        drivingHoursPerDay: v.driving_hours_per_day || 9,
-        driverCommissionPercentage: v.driver_commission_percentage || 10,
-        driverSalaryMonthly: v.driver_salary_monthly || undefined,
-        insuranceYearly: v.insurance_yearly || undefined,
-        registrationYearly: v.registration_yearly || undefined,
-      }));
+      loadVehicleData(vehicles[0]);
     }
-  }, [vehicles]);
+  }, [vehicles, vehicle.licensePlate, loadVehicleData]);
 
   const handleVehicleUpdate = (field: string, value: number | string | boolean) => {
     setVehicle(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Handle selecting a saved vehicle
+  const handleSelectVehicle = (savedVehicle: SavedVehicle) => {
+    loadVehicleData(savedVehicle);
   };
 
   const addPickup = () => setPickups(prev => [...prev, { id: Date.now().toString(), address: '', value: 0, weight: 0 }]);
@@ -199,8 +239,9 @@ const Index = () => {
   const handleSaveVehicle = async () => {
     if (!vehicle.licensePlate) return;
     
-    await saveVehicle({
+    const vehiclePayload = {
       license_plate: vehicle.licensePlate,
+      model_name: vehicle.modelName,
       fuel_consumption: vehicle.fuelConsumption,
       fuel_price: vehicle.fuelPrice,
       axles: vehicle.axles,
@@ -213,21 +254,36 @@ const Index = () => {
       annual_depreciation_rate: vehicle.annualDepreciationRate,
       insurance_yearly: vehicle.insuranceYearly,
       registration_yearly: vehicle.registrationYearly,
+      current_odometer: vehicle.currentOdometer,
+      // Tire References
       ref_tire_price_new: vehicle.refTirePriceNew,
       ref_tire_lifespan_new: vehicle.refTireLifespanNew,
       ref_tire_price_remold: vehicle.refTirePriceRemold,
       ref_tire_lifespan_remold: vehicle.refTireLifespanRemold,
+      // Tire Quantities
       tire_steer_qty_new: vehicle.tireSteerQtyNew,
       tire_steer_qty_remold: vehicle.tireSteerQtyRemold,
       tire_drive_qty_new: vehicle.tireDriveQtyNew,
       tire_drive_qty_remold: vehicle.tireDriveQtyRemold,
       tire_trailer_qty_new: vehicle.tireTrailerQtyNew,
       tire_trailer_qty_remold: vehicle.tireTrailerQtyRemold,
+      // Engine Oil
       oil_change_interval_km: vehicle.oilChangeIntervalKm,
       last_oil_change_cost: vehicle.lastOilChangeCost,
+      // Filters
       filter_change_interval_km: vehicle.filterChangeIntervalKm,
       last_filter_change_cost: vehicle.lastFilterChangeCost,
-    });
+    };
+
+    // Check if updating existing or creating new
+    if (selectedVehicleId) {
+      await updateVehicle(selectedVehicleId, vehiclePayload);
+    } else {
+      const result = await saveVehicle(vehiclePayload);
+      if (result) {
+        setSelectedVehicleId(result.id);
+      }
+    }
   };
 
   const handleReset = () => {
@@ -299,6 +355,9 @@ const Index = () => {
           onUpdate={handleVehicleUpdate}
           onNext={() => setStep('operational')}
           onBack={() => setStep('identification')}
+          vehicles={vehicles}
+          onSelectVehicle={handleSelectVehicle}
+          onSaveVehicle={handleSaveVehicle}
         />
       )}
       {step === 'operational' && (
@@ -312,6 +371,9 @@ const Index = () => {
             setStep('pickup');
           }}
           onBack={() => setStep('costs')}
+          vehicles={vehicles}
+          onSelectVehicle={handleSelectVehicle}
+          onSaveVehicle={handleSaveVehicle}
         />
       )}
       {step === 'pickup' && (

@@ -1,8 +1,12 @@
-import React from 'react';
-import { Settings, Fuel, Clock, Package, Percent, ArrowLeft, ArrowRight, Minus, Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings, Fuel, Clock, Package, Percent, ArrowLeft, ArrowRight, Minus, Plus, Car, Save, ChevronDown, Loader2, Check } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
+import type { SavedVehicle } from '@/hooks/useVehicles';
 
 interface OperationalScreenProps {
   data: {
+    licensePlate?: string;
     fuelConsumption: number;
     fuelPrice: number;
     drivingHoursPerDay: number;
@@ -13,6 +17,9 @@ interface OperationalScreenProps {
   onUpdate: (field: string, value: number) => void;
   onNext: () => void;
   onBack: () => void;
+  vehicles?: SavedVehicle[];
+  onSelectVehicle?: (vehicle: SavedVehicle) => void;
+  onSaveVehicle?: () => Promise<void>;
 }
 
 const OperationalScreen: React.FC<OperationalScreenProps> = ({
@@ -20,10 +27,44 @@ const OperationalScreen: React.FC<OperationalScreenProps> = ({
   onUpdate,
   onNext,
   onBack,
+  vehicles = [],
+  onSelectVehicle,
+  onSaveVehicle,
 }) => {
+  const { user } = useAuth();
+  const [vehicleDropdownOpen, setVehicleDropdownOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+
   const handleInputChange = (field: string, value: string) => {
     const numValue = parseFloat(value.replace(',', '.')) || 0;
     onUpdate(field, numValue);
+  };
+
+  const handleSave = async () => {
+    if (!user) {
+      toast.error('Faça login para salvar veículos');
+      return;
+    }
+    if (!data.licensePlate) {
+      toast.error('Informe a placa do veículo na tela anterior');
+      return;
+    }
+    if (onSaveVehicle) {
+      setSaving(true);
+      try {
+        await onSaveVehicle();
+      } finally {
+        setSaving(false);
+      }
+    }
+  };
+
+  const handleSelectVehicle = (vehicle: SavedVehicle) => {
+    if (onSelectVehicle) {
+      onSelectVehicle(vehicle);
+      toast.success(`Veículo ${vehicle.license_plate} carregado!`);
+    }
+    setVehicleDropdownOpen(false);
   };
 
   const axleOptions = [
@@ -47,10 +88,76 @@ const OperationalScreen: React.FC<OperationalScreenProps> = ({
             </div>
             <div>
               <h1 className="text-xl font-bold">Operacional</h1>
-              <p className="text-sm text-white/70">INFORMAÇÕES • 2/6 • ETAPAS</p>
+              <p className="text-sm text-white/70">INFORMAÇÕES • 3/6 • ETAPAS</p>
             </div>
           </div>
         </div>
+
+        {/* Vehicle Selector - Show only if user is logged in */}
+        {user && vehicles.length > 0 && (
+          <div className="bg-gradient-to-r from-emerald-50 to-blue-50 rounded-xl p-4 border border-emerald-200">
+            <div className="flex items-center justify-between gap-3">
+              <div className="relative flex-1">
+                <button
+                  onClick={() => setVehicleDropdownOpen(!vehicleDropdownOpen)}
+                  className="w-full flex items-center justify-between gap-2 px-4 py-3 bg-white rounded-xl border-2 border-[hsl(var(--border))] hover:border-blue-400 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <Car size={18} className="text-blue-600" />
+                    <span className="font-medium text-[hsl(var(--foreground))]">
+                      {data.licensePlate || 'Selecionar veículo'}
+                    </span>
+                  </div>
+                  <ChevronDown size={18} className={`text-[hsl(var(--muted-foreground))] transition-transform ${vehicleDropdownOpen ? 'rotate-180' : ''}`} />
+                </button>
+
+                {vehicleDropdownOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setVehicleDropdownOpen(false)} />
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-[hsl(var(--border))] shadow-lg z-50 max-h-64 overflow-auto">
+                      {vehicles.map((v) => (
+                        <button
+                          key={v.id}
+                          onClick={() => handleSelectVehicle(v)}
+                          className={`w-full flex items-center justify-between px-4 py-3 hover:bg-[hsl(var(--secondary))] transition-colors ${
+                            v.license_plate === data.licensePlate ? 'bg-blue-50' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                              <Car size={16} className="text-blue-600" />
+                            </div>
+                            <div className="text-left">
+                              <p className="font-semibold text-[hsl(var(--foreground))]">{v.license_plate}</p>
+                              {v.model_name && (
+                                <p className="text-xs text-[hsl(var(--muted-foreground))]">{v.model_name}</p>
+                              )}
+                            </div>
+                          </div>
+                          {v.license_plate === data.licensePlate && (
+                            <Check size={18} className="text-emerald-600" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <button
+                onClick={handleSave}
+                disabled={saving || !data.licensePlate}
+                className="flex items-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-medium transition-colors disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                <span className="hidden sm:inline">Salvar</span>
+              </button>
+            </div>
+            <p className="text-xs text-[hsl(var(--muted-foreground))] mt-2 text-center">
+              💾 Os dados serão salvos vinculados à placa do veículo
+            </p>
+          </div>
+        )}
 
         {/* Combustível & Tempo */}
         <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] p-6 space-y-5">
