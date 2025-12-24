@@ -42,9 +42,9 @@ export const useCredits = () => {
       .from('user_credits')
       .select('balance')
       .eq('user_id', user.id)
-      .single();
+      .maybeSingle();
 
-    if (error && error.code !== 'PGRST116') {
+    if (error) {
       console.error('Error fetching balance:', error);
     }
     setBalance(data?.balance || 0);
