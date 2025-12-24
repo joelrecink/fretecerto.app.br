@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, LogOut, Menu, X, Truck, MapPin, Settings, Shield } from 'lucide-react';
+import { User, LogOut, Menu, X, Truck, MapPin, Settings, Shield, Coins } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useVehicles, SavedVehicle } from '@/hooks/useVehicles';
@@ -394,6 +394,13 @@ const Index = () => {
               >
                 <MapPin size={20} className="text-purple-600" />
                 <span>Histórico de Viagens</span>
+              </button>
+              <button
+                onClick={() => { navigate('/credits'); setMenuOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-amber-50 transition-colors text-left"
+              >
+                <Coins size={20} className="text-amber-600" />
+                <span>Comprar Créditos</span>
               </button>
               {isAdmin && (
                 <button
