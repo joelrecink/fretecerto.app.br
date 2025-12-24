@@ -496,9 +496,14 @@ const PackageForm: React.FC<{
         <div>
           <label className="block text-xs font-medium mb-1">Créditos</label>
           <input
-            type="number"
-            value={form.credits || ''}
-            onChange={(e) => setForm({ ...form, credits: parseInt(e.target.value) || 0 })}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={form.credits !== undefined ? String(form.credits) : ''}
+            onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, '');
+              setForm({ ...form, credits: val ? parseInt(val, 10) : 0 });
+            }}
             className="w-full px-3 py-2 border rounded-lg text-sm"
             placeholder="10"
           />
@@ -506,9 +511,14 @@ const PackageForm: React.FC<{
         <div>
           <label className="block text-xs font-medium mb-1">Preço (centavos)</label>
           <input
-            type="number"
-            value={form.price_cents || ''}
-            onChange={(e) => setForm({ ...form, price_cents: parseInt(e.target.value) || 0 })}
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            value={form.price_cents !== undefined ? String(form.price_cents) : ''}
+            onChange={(e) => {
+              const val = e.target.value.replace(/\D/g, '');
+              setForm({ ...form, price_cents: val ? parseInt(val, 10) : 0 });
+            }}
             className="w-full px-3 py-2 border rounded-lg text-sm"
             placeholder="5000 = R$50"
           />
