@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.create-pix-checkout]
 verify_jwt = false
 
+[functions.create-pix-payment]
+verify_jwt = false
+
 [functions.stripe-webhook]
 verify_jwt = false
 
