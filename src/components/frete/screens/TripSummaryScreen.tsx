@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Truck, MapPin, Navigation, ArrowLeft, Calculator, Edit3, Sparkles, RotateCcw, Info } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Truck, MapPin, Navigation, ArrowLeft, Calculator, Edit3, Sparkles, RotateCcw, Info, Coins, LogIn } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
 
 interface RoutePoint {
   id: string;
@@ -27,6 +29,7 @@ interface TripSummaryScreenProps {
   onEditVehicle: () => void;
   loading?: boolean;
   userCredits?: number;
+  isLoggedIn?: boolean;
 }
 
 const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
@@ -40,7 +43,9 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
   onEditVehicle,
   loading = false,
   userCredits = 0,
+  isLoggedIn = false,
 }) => {
+  const navigate = useNavigate();
   const [includeReturn, setIncludeReturn] = useState(false);
   const [estimatedReturnCost, setEstimatedReturnCost] = useState(0);
 
@@ -61,6 +66,20 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
   };
 
   const hasInsufficientCredits = userCredits < 1;
+
+  const handleCalculateClick = () => {
+    if (!isLoggedIn) {
+      navigate('/auth');
+      return;
+    }
+    
+    if (hasInsufficientCredits) {
+      navigate('/credits');
+      return;
+    }
+    
+    onCalculate(includeReturn, estimatedReturnCost);
+  };
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-[hsl(var(--background))] pb-32">
@@ -92,15 +111,46 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
             </div>
             <div className="text-right">
               <p className="text-sm text-[hsl(var(--muted-foreground))]">Seus créditos</p>
-              <p className={`text-xl font-bold ${hasInsufficientCredits ? 'text-red-600' : 'text-violet-600'}`}>
-                {userCredits}
-              </p>
+              {isLoggedIn ? (
+                <p className={`text-xl font-bold ${hasInsufficientCredits ? 'text-red-600' : 'text-violet-600'}`}>
+                  {userCredits}
+                </p>
+              ) : (
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">Faça login</p>
+              )}
             </div>
           </div>
-          {hasInsufficientCredits && (
-            <p className="mt-3 text-sm text-red-600 bg-red-50 p-2 rounded-lg">
-              ⚠️ Créditos insuficientes. Adquira mais créditos para usar a análise com IA.
-            </p>
+          {!isLoggedIn && (
+            <div className="mt-3 bg-blue-50 p-3 rounded-lg">
+              <p className="text-sm text-blue-700 mb-2">
+                🔐 Faça login ou cadastre-se para usar a análise com IA
+              </p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => navigate('/auth')}
+                className="w-full border-blue-300 text-blue-700 hover:bg-blue-100"
+              >
+                <LogIn size={16} className="mr-2" />
+                Entrar ou Cadastrar
+              </Button>
+            </div>
+          )}
+          {isLoggedIn && hasInsufficientCredits && (
+            <div className="mt-3 bg-amber-50 p-3 rounded-lg">
+              <p className="text-sm text-amber-700 mb-2">
+                ⚠️ Créditos insuficientes. Adquira mais créditos para usar a análise com IA.
+              </p>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => navigate('/credits')}
+                className="w-full border-amber-300 text-amber-700 hover:bg-amber-100"
+              >
+                <Coins size={16} className="mr-2" />
+                Comprar Créditos
+              </Button>
+            </div>
           )}
         </div>
 
@@ -275,14 +325,30 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
             <ArrowLeft size={24} />
           </button>
           <button
-            onClick={() => onCalculate(includeReturn, estimatedReturnCost)}
-            disabled={loading || hasInsufficientCredits}
-            className="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 text-lg transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+            onClick={handleCalculateClick}
+            disabled={loading}
+            className={`flex-1 font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 text-lg transition-all active:scale-[0.98] ${
+              !isLoggedIn 
+                ? 'bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white'
+                : hasInsufficientCredits
+                  ? 'bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-white'
+                  : 'bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white'
+            } disabled:opacity-70 disabled:cursor-not-allowed`}
           >
             {loading ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
                 Analisando com IA...
+              </>
+            ) : !isLoggedIn ? (
+              <>
+                <LogIn size={20} />
+                Entrar para Calcular
+              </>
+            ) : hasInsufficientCredits ? (
+              <>
+                <Coins size={20} />
+                Comprar Créditos
               </>
             ) : (
               <>
