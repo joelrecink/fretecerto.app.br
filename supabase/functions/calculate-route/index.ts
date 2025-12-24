@@ -230,27 +230,11 @@ serve(async (req) => {
       }
     }
 
-    // Fallback to estimated toll calculation if TollGuru fails or is not configured
+    // If TollGuru fails or is not configured, toll cost remains 0
     if (tollSource === 'estimated') {
-      console.log('Using estimated toll calculation (TollGuru not available or failed)');
-      
-      // Estimate tolls based on Brazilian highway toll data
-      // Average toll cost per km varies by road type and axles
-      const tollRatePerKm: Record<number, number> = {
-        2: 0.15,
-        3: 0.22,
-        4: 0.30,
-        5: 0.38,
-        6: 0.45,
-        7: 0.52,
-        9: 0.65,
-      };
-      
-      const axleRate = tollRatePerKm[axles] || tollRatePerKm[6];
-      
-      // Estimate that ~60% of Brazilian interstate routes have tolls
-      const tollableDistance = totalDistanceKm * 0.6;
-      estimatedTollCost = tollableDistance * axleRate;
+      console.log('TollGuru not available or failed - toll cost will be 0 (only real data is used)');
+      estimatedTollCost = 0;
+      tollSource = 'unavailable';
     }
 
     const result = {
