@@ -101,7 +101,12 @@ export const useCredits = () => {
     }
 
     if (response.data?.url) {
-      window.location.href = response.data.url;
+      // Use window.open for better compatibility, especially in iframes
+      const stripeWindow = window.open(response.data.url, '_blank');
+      if (!stripeWindow) {
+        // Fallback if popup blocked
+        window.location.href = response.data.url;
+      }
     }
 
     return response.data;
