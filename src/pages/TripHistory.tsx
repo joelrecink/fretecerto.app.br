@@ -119,6 +119,7 @@ const TripCard: React.FC<TripCardProps> = ({ trip, formatCurrency }) => {
         <div className="bg-[hsl(var(--secondary))] rounded-lg p-3">
           <p className="text-[hsl(var(--muted-foreground))] text-xs">Duração</p>
           <p className="font-semibold">{trip.total_duration_days} dias</p>
+          <p className="text-[hsl(var(--muted-foreground))] text-xs">{trip.total_duration_hours.toFixed(1)}h de viagem</p>
         </div>
         <div className="bg-[hsl(var(--secondary))] rounded-lg p-3">
           <p className="text-[hsl(var(--muted-foreground))] text-xs">Receita</p>
