@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Coins, Package, Settings, Plus, Edit2, Trash2, Save, X, Key } from 'lucide-react';
+import { Coins, Package, Settings, Plus, Edit2, Trash2, Save, X, Key, CheckCircle, Clock, AlertCircle, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -33,6 +33,11 @@ interface CreditTransaction {
   created_at: string;
 }
 
+interface UserProfile {
+  user_id: string;
+  full_name: string | null;
+}
+
 interface AdminCreditsProps {
   searchTerm: string;
 }
@@ -41,8 +46,11 @@ const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [pixConfig, setPixConfig] = useState<PixConfig | null>(null);
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
+  const [pendingPixTransactions, setPendingPixTransactions] = useState<CreditTransaction[]>([]);
+  const [userProfiles, setUserProfiles] = useState<UserProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [subTab, setSubTab] = useState<'packages' | 'pix' | 'transactions'>('packages');
+  const [confirmingPayment, setConfirmingPayment] = useState<string | null>(null);
+  const [subTab, setSubTab] = useState<'packages' | 'pix' | 'pending' | 'transactions'>('pending');
   
   // Edit states
   const [editingPackage, setEditingPackage] = useState<CreditPackage | null>(null);
@@ -57,15 +65,26 @@ const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
   const fetchData = async () => {
     setLoading(true);
     
-    const [packagesRes, pixRes, transactionsRes] = await Promise.all([
+    const [packagesRes, pixRes, transactionsRes, profilesRes] = await Promise.all([
       supabase.from('credit_packages').select('*').order('sort_order'),
       supabase.from('pix_config').select('*').eq('is_active', true).single(),
       supabase.from('credit_transactions').select('*').order('created_at', { ascending: false }).limit(100),
+      supabase.from('profiles').select('user_id, full_name'),
     ]);
 
     setPackages((packagesRes.data as CreditPackage[]) || []);
     setPixConfig((pixRes.data as PixConfig) || null);
-    setTransactions((transactionsRes.data as CreditTransaction[]) || []);
+    
+    const allTransactions = (transactionsRes.data as CreditTransaction[]) || [];
+    setTransactions(allTransactions);
+    
+    // Filter pending PIX transactions (type purchase, status pending)
+    const pending = allTransactions.filter(tx => 
+      tx.type === 'purchase' && tx.status === 'pending'
+    );
+    setPendingPixTransactions(pending);
+    
+    setUserProfiles((profilesRes.data as UserProfile[]) || []);
     
     if (pixRes.data) {
       setPixForm(pixRes.data as PixConfig);
@@ -174,6 +193,78 @@ const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
     return key.slice(0, 8) + '***';
   };
 
+  const getUserName = (userId: string) => {
+    const profile = userProfiles.find(p => p.user_id === userId);
+    return profile?.full_name || 'Usuário desconhecido';
+  };
+
+  // Confirm PIX payment handler
+  const handleConfirmPixPayment = async (transaction: CreditTransaction) => {
+    if (!confirm(`Confirmar pagamento PIX de ${formatCurrency(transaction.package_price_cents || 0)} para ${getUserName(transaction.user_id)}?\n\nIsso adicionará ${transaction.amount} créditos ao usuário.`)) {
+      return;
+    }
+
+    setConfirmingPayment(transaction.id);
+
+    try {
+      // Use the add_user_credits function to add credits and update transaction status
+      const { data, error } = await supabase.rpc('add_user_credits', {
+        _user_id: transaction.user_id,
+        _amount: transaction.amount,
+        _type: 'purchase',
+        _description: `PIX confirmado: ${transaction.package_name}`,
+        _package_name: transaction.package_name,
+        _package_price_cents: transaction.package_price_cents,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      // Update the original pending transaction status to completed
+      const { error: updateError } = await supabase
+        .from('credit_transactions')
+        .update({ status: 'completed' })
+        .eq('id', transaction.id);
+
+      if (updateError) {
+        console.error('Error updating transaction status:', updateError);
+      }
+
+      toast.success(`Pagamento confirmado! ${transaction.amount} créditos adicionados.`);
+      fetchData();
+    } catch (error) {
+      console.error('Error confirming PIX payment:', error);
+      toast.error('Erro ao confirmar pagamento');
+    } finally {
+      setConfirmingPayment(null);
+    }
+  };
+
+  // Reject PIX payment handler
+  const handleRejectPixPayment = async (transactionId: string) => {
+    if (!confirm('Rejeitar este pagamento PIX? A transação será marcada como falha.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('credit_transactions')
+        .update({ status: 'failed' })
+        .eq('id', transactionId);
+
+      if (error) {
+        throw error;
+      }
+
+      toast.success('Pagamento rejeitado');
+      fetchData();
+    } catch (error) {
+      console.error('Error rejecting payment:', error);
+      toast.error('Erro ao rejeitar pagamento');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -185,7 +276,21 @@ const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
   return (
     <div className="space-y-4">
       {/* Sub-tabs */}
-      <div className="flex gap-2 mb-4">
+      <div className="flex gap-2 mb-4 flex-wrap">
+        <button
+          onClick={() => setSubTab('pending')}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors relative ${
+            subTab === 'pending' ? 'bg-emerald-100 text-emerald-700' : 'bg-white text-gray-600 hover:bg-gray-100'
+          }`}
+        >
+          <Clock size={18} />
+          PIX Pendentes
+          {pendingPixTransactions.length > 0 && (
+            <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+              {pendingPixTransactions.length}
+            </span>
+          )}
+        </button>
         <button
           onClick={() => setSubTab('packages')}
           className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
@@ -214,6 +319,76 @@ const AdminCredits: React.FC<AdminCreditsProps> = ({ searchTerm }) => {
           Transações
         </button>
       </div>
+
+      {/* Pending PIX Payments Tab */}
+      {subTab === 'pending' && (
+        <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] overflow-hidden">
+          <div className="p-4 border-b bg-gradient-to-r from-emerald-50 to-green-50">
+            <h3 className="font-semibold flex items-center gap-2 text-emerald-800">
+              <Clock size={18} />
+              Pagamentos PIX Pendentes
+            </h3>
+            <p className="text-sm text-emerald-600 mt-1">
+              Confirme os pagamentos após verificar o recebimento no extrato bancário
+            </p>
+          </div>
+          
+          {pendingPixTransactions.length === 0 ? (
+            <div className="p-12 text-center text-[hsl(var(--muted-foreground))]">
+              <CheckCircle size={48} className="mx-auto mb-4 opacity-50 text-emerald-500" />
+              <p>Nenhum pagamento PIX pendente</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-[hsl(var(--border))]">
+              {pendingPixTransactions.map((tx) => (
+                <div key={tx.id} className="p-4 flex items-center gap-4 hover:bg-gray-50">
+                  <div className="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center">
+                    <Clock size={24} className="text-amber-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <User size={14} className="text-gray-400" />
+                      <span className="font-medium">{getUserName(tx.user_id)}</span>
+                    </div>
+                    <div className="text-sm text-[hsl(var(--muted-foreground))]">
+                      {tx.package_name} • {tx.amount} créditos
+                    </div>
+                    <div className="text-xs text-[hsl(var(--muted-foreground))]">
+                      {format(new Date(tx.created_at), 'dd/MM/yyyy HH:mm')}
+                    </div>
+                  </div>
+                  <div className="text-right mr-4">
+                    <div className="text-lg font-bold text-emerald-600">
+                      {formatCurrency(tx.package_price_cents || 0)}
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleConfirmPixPayment(tx)}
+                      disabled={confirmingPayment === tx.id}
+                      className="flex items-center gap-2 px-4 py-2 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors disabled:opacity-50"
+                    >
+                      {confirmingPayment === tx.id ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <CheckCircle size={16} />
+                      )}
+                      Confirmar
+                    </button>
+                    <button
+                      onClick={() => handleRejectPixPayment(tx.id)}
+                      className="flex items-center gap-2 px-4 py-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 transition-colors"
+                    >
+                      <X size={16} />
+                      Rejeitar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Packages Tab */}
       {subTab === 'packages' && (
