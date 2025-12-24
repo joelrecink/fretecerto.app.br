@@ -15,6 +15,9 @@ const Credits = () => {
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'packages' | 'history'>('packages');
 
+  // Destructure balance for display
+  const { premium: premiumCredits, free: freeCredits, total: totalCredits } = balance;
+
   useEffect(() => {
     if (!authLoading && !user) {
       navigate('/auth');
@@ -123,7 +126,7 @@ const Credits = () => {
           </div>
           <div className="flex items-center gap-2 bg-white/20 px-4 py-2 rounded-lg">
             <Sparkles size={18} />
-            <span className="font-bold text-lg">{balance}</span>
+            <span className="font-bold text-lg">{totalCredits}</span>
             <span className="text-sm opacity-80">créditos</span>
           </div>
         </div>
@@ -162,10 +165,29 @@ const Credits = () => {
       <main className="max-w-4xl mx-auto p-4">
         {activeTab === 'packages' && (
           <div className="space-y-4">
+            {/* Credit Balance Summary */}
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              <div className="bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl p-4 text-white">
+                <div className="text-sm opacity-80">Créditos Premium</div>
+                <div className="text-2xl font-bold">{premiumCredits}</div>
+                <div className="text-xs opacity-70">Não expiram</div>
+              </div>
+              <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-2xl p-4 text-white">
+                <div className="text-sm opacity-80">Créditos Gratuitos</div>
+                <div className="text-2xl font-bold">{freeCredits}</div>
+                <div className="text-xs opacity-70">Resetam diariamente</div>
+              </div>
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-4 text-white">
+                <div className="text-sm opacity-80">Total Disponível</div>
+                <div className="text-2xl font-bold">{totalCredits}</div>
+                <div className="text-xs opacity-70">Para usar agora</div>
+              </div>
+            </div>
+
             <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-6 mb-6">
               <h2 className="text-lg font-semibold text-amber-800 mb-2">Como funcionam os créditos?</h2>
               <p className="text-amber-700">
-                Cada análise de rota com IA consome 1 crédito. Compre pacotes de créditos e economize!
+                Cada análise de rota com IA consome 1 crédito. Você recebe 1 crédito gratuito por dia. Compre pacotes de créditos premium para análises ilimitadas!
               </p>
             </div>
 

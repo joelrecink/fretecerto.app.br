@@ -16,7 +16,7 @@ export interface CreditTransaction {
   id: string;
   user_id: string;
   amount: number;
-  type: 'purchase' | 'usage' | 'refund' | 'bonus';
+  type: 'purchase' | 'usage' | 'refund' | 'bonus' | 'daily';
   description: string | null;
   stripe_session_id: string | null;
   package_name: string | null;
@@ -25,29 +25,42 @@ export interface CreditTransaction {
   created_at: string;
 }
 
+export interface CreditBalance {
+  premium: number;
+  free: number;
+  total: number;
+}
+
 export const useCredits = () => {
   const { user } = useAuth();
-  const [balance, setBalance] = useState<number>(0);
+  const [balance, setBalance] = useState<CreditBalance>({ premium: 0, free: 0, total: 0 });
   const [packages, setPackages] = useState<CreditPackage[]>([]);
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchBalance = async () => {
     if (!user) {
-      setBalance(0);
+      setBalance({ premium: 0, free: 0, total: 0 });
       return;
     }
 
-    const { data, error } = await supabase
-      .from('user_credits')
-      .select('balance')
-      .eq('user_id', user.id)
-      .maybeSingle();
+    const { data, error } = await supabase.rpc('get_user_credits_with_daily', {
+      _user_id: user.id
+    });
 
     if (error) {
       console.error('Error fetching balance:', error);
+      setBalance({ premium: 0, free: 0, total: 0 });
+      return;
     }
-    setBalance(data?.balance || 0);
+
+    if (data && data.length > 0) {
+      setBalance({
+        premium: data[0].premium_balance || 0,
+        free: data[0].free_balance || 0,
+        total: data[0].total_balance || 0
+      });
+    }
   };
 
   const fetchPackages = async () => {
@@ -101,10 +114,8 @@ export const useCredits = () => {
     }
 
     if (response.data?.url) {
-      // Use window.open for better compatibility, especially in iframes
       const stripeWindow = window.open(response.data.url, '_blank');
       if (!stripeWindow) {
-        // Fallback if popup blocked
         window.location.href = response.data.url;
       }
     }

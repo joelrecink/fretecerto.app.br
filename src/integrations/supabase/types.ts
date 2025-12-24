@@ -155,6 +155,33 @@ export type Database = {
         }
         Relationships: []
       }
+      system_settings: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          key: string
+          updated_at: string
+          value: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key: string
+          updated_at?: string
+          value: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          key?: string
+          updated_at?: string
+          value?: string
+        }
+        Relationships: []
+      }
       trip_history: {
         Row: {
           created_at: string
@@ -236,6 +263,8 @@ export type Database = {
         Row: {
           balance: number
           created_at: string
+          free_credits: number
+          free_credits_last_reset: string | null
           id: string
           updated_at: string
           user_id: string
@@ -243,6 +272,8 @@ export type Database = {
         Insert: {
           balance?: number
           created_at?: string
+          free_credits?: number
+          free_credits_last_reset?: string | null
           id?: string
           updated_at?: string
           user_id: string
@@ -250,6 +281,8 @@ export type Database = {
         Update: {
           balance?: number
           created_at?: string
+          free_credits?: number
+          free_credits_last_reset?: string | null
           id?: string
           updated_at?: string
           user_id?: string
@@ -404,6 +437,14 @@ export type Database = {
         Returns: boolean
       }
       get_user_credit_balance: { Args: { _user_id: string }; Returns: number }
+      get_user_credits_with_daily: {
+        Args: { _user_id: string }
+        Returns: {
+          free_balance: number
+          premium_balance: number
+          total_balance: number
+        }[]
+      }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
