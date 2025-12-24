@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Truck, MapPin, Shield, TrendingUp, Search, Trash2, UserCog, Coins } from 'lucide-react';
+import { ArrowLeft, Users, Truck, MapPin, Shield, TrendingUp, Search, Trash2, UserCog, Coins, DollarSign, CreditCard, Cpu } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
@@ -76,8 +76,44 @@ const Admin = () => {
       const { data: usersCount } = await supabase.from('profiles').select('id', { count: 'exact' });
       const { data: tripsData } = await supabase.from('trip_history').select('net_profit, total_freight_income');
       
+      // Get credit transactions for revenue calculation
+      const { data: creditTransactions } = await supabase
+        .from('credit_transactions')
+        .select('amount, type, status, package_price_cents');
+      
+      // Calculate credit sales revenue (completed purchases only)
+      const creditSalesRevenue = creditTransactions
+        ?.filter(t => t.type === 'purchase' && t.status === 'completed' && t.package_price_cents)
+        .reduce((acc, t) => acc + (t.package_price_cents || 0), 0) || 0;
+      
+      // Count total AI analysis (credit usage)
+      const totalAIAnalysis = creditTransactions
+        ?.filter(t => t.type === 'usage' && t.status === 'completed')
+        .reduce((acc, t) => acc + Math.abs(t.amount), 0) || 0;
+      
+      // Calculate total route calculations (trips count)
+      const totalRouteCalculations = tripsCount?.length || 0;
+      
+      // Estimated API costs
+      // Google Maps Directions: ~$0.005 per request
+      // TollGuru: ~$0.02 per request
+      // Google Static Maps: ~$0.002 per request
+      // Lovable AI (Gemini Flash): ~$0.0003 per 1K tokens (estimate ~2K tokens per analysis = $0.0006)
+      const googleMapsDirectionsCost = totalRouteCalculations * 0.005; // $0.005 per request
+      const tollGuruCost = totalRouteCalculations * 0.02; // $0.02 per request
+      const googleStaticMapsCost = totalRouteCalculations * 0.002; // $0.002 per request
+      const lovableAICost = totalAIAnalysis * 0.01; // ~$0.01 per AI analysis (conservative estimate)
+      
+      // Convert USD to BRL (approximate rate)
+      const usdToBrl = 5.5;
+      const totalApiCostUSD = googleMapsDirectionsCost + tollGuruCost + googleStaticMapsCost + lovableAICost;
+      const totalApiCostBRL = totalApiCostUSD * usdToBrl;
+      
       const totalProfit = tripsData?.reduce((acc, t) => acc + (t.net_profit || 0), 0) || 0;
       const totalRevenue = tripsData?.reduce((acc, t) => acc + (t.total_freight_income || 0), 0) || 0;
+      
+      // Net platform profit (credit sales - API costs)
+      const platformNetProfit = (creditSalesRevenue / 100) - totalApiCostBRL;
       
       setStats({
         users: usersCount?.length || 0,
@@ -85,6 +121,16 @@ const Admin = () => {
         trips: tripsCount?.length || 0,
         totalProfit,
         totalRevenue,
+        creditSalesRevenue: creditSalesRevenue / 100, // Convert cents to BRL
+        totalApiCostBRL,
+        totalAIAnalysis,
+        totalRouteCalculations,
+        platformNetProfit,
+        apiBreakdown: {
+          googleMaps: (googleMapsDirectionsCost + googleStaticMapsCost) * usdToBrl,
+          tollGuru: tollGuruCost * usdToBrl,
+          lovableAI: lovableAICost * usdToBrl,
+        }
       });
     }
     
@@ -379,37 +425,115 @@ const Admin = () => {
 
             {/* Stats Tab */}
             {activeTab === 'stats' && stats && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <StatCard
-                  icon={Users}
-                  label="Total de Usuários"
-                  value={stats.users}
-                  color="blue"
-                />
-                <StatCard
-                  icon={Truck}
-                  label="Veículos Cadastrados"
-                  value={stats.vehicles}
-                  color="emerald"
-                />
-                <StatCard
-                  icon={MapPin}
-                  label="Viagens Calculadas"
-                  value={stats.trips}
-                  color="purple"
-                />
-                <StatCard
-                  icon={TrendingUp}
-                  label="Receita Total"
-                  value={formatCurrency(stats.totalRevenue)}
-                  color="amber"
-                />
-                <StatCard
-                  icon={TrendingUp}
-                  label="Lucro Total Calculado"
-                  value={formatCurrency(stats.totalProfit)}
-                  color="emerald"
-                />
+              <div className="space-y-6">
+                {/* Platform Revenue Section */}
+                <div>
+                  <h3 className="text-lg font-semibold text-[hsl(var(--foreground))] mb-4 flex items-center gap-2">
+                    <DollarSign size={20} className="text-emerald-600" />
+                    Receita da Plataforma
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <StatCard
+                      icon={CreditCard}
+                      label="Vendas de Créditos"
+                      value={formatCurrency(stats.creditSalesRevenue)}
+                      color="emerald"
+                    />
+                    <StatCard
+                      icon={Cpu}
+                      label="Custos de API"
+                      value={formatCurrency(stats.totalApiCostBRL)}
+                      color="amber"
+                    />
+                    <StatCard
+                      icon={TrendingUp}
+                      label="Lucro Líquido Plataforma"
+                      value={formatCurrency(stats.platformNetProfit)}
+                      color={stats.platformNetProfit >= 0 ? 'emerald' : 'amber'}
+                    />
+                  </div>
+                </div>
+
+                {/* API Costs Breakdown */}
+                <div className="bg-white rounded-2xl p-6 shadow-sm border border-[hsl(var(--border))]">
+                  <h4 className="font-semibold text-[hsl(var(--foreground))] mb-4">Detalhamento de Custos de API</h4>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center py-2 border-b border-[hsl(var(--border))]">
+                      <span className="text-[hsl(var(--muted-foreground))]">Google Maps (Directions + Static)</span>
+                      <span className="font-medium">{formatCurrency(stats.apiBreakdown?.googleMaps || 0)}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-[hsl(var(--border))]">
+                      <span className="text-[hsl(var(--muted-foreground))]">TollGuru (Pedágios)</span>
+                      <span className="font-medium">{formatCurrency(stats.apiBreakdown?.tollGuru || 0)}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 border-b border-[hsl(var(--border))]">
+                      <span className="text-[hsl(var(--muted-foreground))]">Lovable AI (Análise IA)</span>
+                      <span className="font-medium">{formatCurrency(stats.apiBreakdown?.lovableAI || 0)}</span>
+                    </div>
+                    <div className="flex justify-between items-center py-2 font-semibold">
+                      <span>Total Estimado</span>
+                      <span className="text-amber-600">{formatCurrency(stats.totalApiCostBRL)}</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))] mt-4">
+                    * Valores estimados com base em {stats.totalRouteCalculations} cálculos de rota e {stats.totalAIAnalysis} análises de IA
+                  </p>
+                </div>
+
+                {/* Usage Stats */}
+                <div>
+                  <h3 className="text-lg font-semibold text-[hsl(var(--foreground))] mb-4 flex items-center gap-2">
+                    <TrendingUp size={20} className="text-blue-600" />
+                    Estatísticas de Uso
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <StatCard
+                      icon={Users}
+                      label="Total de Usuários"
+                      value={stats.users}
+                      color="blue"
+                    />
+                    <StatCard
+                      icon={Truck}
+                      label="Veículos Cadastrados"
+                      value={stats.vehicles}
+                      color="emerald"
+                    />
+                    <StatCard
+                      icon={MapPin}
+                      label="Rotas Calculadas"
+                      value={stats.trips}
+                      color="purple"
+                    />
+                    <StatCard
+                      icon={Coins}
+                      label="Análises com IA"
+                      value={stats.totalAIAnalysis}
+                      color="purple"
+                    />
+                  </div>
+                </div>
+
+                {/* Freight Stats */}
+                <div>
+                  <h3 className="text-lg font-semibold text-[hsl(var(--foreground))] mb-4">
+                    Fretes Analisados (Usuários)
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <StatCard
+                      icon={TrendingUp}
+                      label="Receita Total de Fretes"
+                      value={formatCurrency(stats.totalRevenue)}
+                      color="amber"
+                    />
+                    <StatCard
+                      icon={TrendingUp}
+                      label="Lucro Total Calculado"
+                      value={formatCurrency(stats.totalProfit)}
+                      color="emerald"
+                    />
+                  </div>
+                </div>
               </div>
             )}
           </>
