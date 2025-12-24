@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { User, LogOut } from 'lucide-react';
+import { User, LogOut, Menu, X, Truck, MapPin, Settings, Shield } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useUserRole } from '@/hooks/useUserRole';
 import { useVehicles, SavedVehicle } from '@/hooks/useVehicles';
 import { useTripHistory } from '@/hooks/useTripHistory';
 import IdentificationScreen from '@/components/frete/screens/IdentificationScreen';
@@ -87,6 +88,7 @@ const DEFAULT_VEHICLE: VehicleData = {
 const Index = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading, signOut } = useAuth();
+  const { isAdmin } = useUserRole();
   const { vehicles, saveVehicle, updateVehicle } = useVehicles();
   const { saveTrip } = useTripHistory();
 
@@ -97,6 +99,7 @@ const Index = () => {
   const [deliveries, setDeliveries] = useState<RoutePoint[]>([{ id: '1', address: '', value: 0 }]);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Load user profile name if logged in
   useEffect(() => {
@@ -316,16 +319,11 @@ const Index = () => {
           <div className="flex items-center gap-3">
             {user ? (
               <>
-                <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] text-sm bg-[hsl(var(--secondary))] px-3 py-1.5 rounded-full">
-                  <User size={14} />
-                  <span>{vehicle.driverName || user.email}</span>
-                </div>
                 <button
-                  onClick={signOut}
-                  className="p-2 text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors"
-                  title="Sair"
+                  onClick={() => setMenuOpen(!menuOpen)}
+                  className="p-2 hover:bg-[hsl(var(--secondary))] rounded-lg transition-colors"
                 >
-                  <LogOut size={18} />
+                  {menuOpen ? <X size={20} /> : <Menu size={20} />}
                 </button>
               </>
             ) : (
@@ -339,6 +337,74 @@ const Index = () => {
           </div>
         </div>
       </header>
+
+      {/* Mobile Menu */}
+      {menuOpen && user && (
+        <div className="fixed inset-0 z-50 bg-black/50" onClick={() => setMenuOpen(false)}>
+          <div 
+            className="absolute right-0 top-0 h-full w-72 bg-white shadow-xl p-4 space-y-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-[hsl(var(--border))]">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-bold">
+                  {vehicle.driverName?.charAt(0)?.toUpperCase() || user.email?.charAt(0)?.toUpperCase()}
+                </div>
+                <div>
+                  <p className="font-semibold text-sm">{vehicle.driverName || 'Usuário'}</p>
+                  <p className="text-xs text-[hsl(var(--muted-foreground))]">{user.email}</p>
+                </div>
+              </div>
+              <button onClick={() => setMenuOpen(false)} className="p-2 hover:bg-[hsl(var(--secondary))] rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+
+            <nav className="space-y-1">
+              <button
+                onClick={() => { navigate('/profile'); setMenuOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[hsl(var(--secondary))] transition-colors text-left"
+              >
+                <User size={20} className="text-blue-600" />
+                <span>Meu Perfil</span>
+              </button>
+              <button
+                onClick={() => { navigate('/vehicles'); setMenuOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[hsl(var(--secondary))] transition-colors text-left"
+              >
+                <Truck size={20} className="text-emerald-600" />
+                <span>Meus Veículos</span>
+              </button>
+              <button
+                onClick={() => { navigate('/history'); setMenuOpen(false); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-[hsl(var(--secondary))] transition-colors text-left"
+              >
+                <MapPin size={20} className="text-purple-600" />
+                <span>Histórico de Viagens</span>
+              </button>
+              {isAdmin && (
+                <button
+                  onClick={() => { navigate('/admin'); setMenuOpen(false); }}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-purple-50 transition-colors text-left text-purple-700"
+                >
+                  <Shield size={20} />
+                  <span>Painel Admin</span>
+                </button>
+              )}
+            </nav>
+
+            <div className="absolute bottom-4 left-4 right-4">
+              <button
+                onClick={() => { signOut(); setMenuOpen(false); }}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 transition-colors font-medium"
+              >
+                <LogOut size={18} />
+                <span>Sair</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Screens */}
       {step === 'identification' && (
