@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
-import { Truck, User } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { User, LogOut, Car, History } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useVehicles } from '@/hooks/useVehicles';
+import { useTripHistory } from '@/hooks/useTripHistory';
 import IdentificationScreen from '@/components/frete/screens/IdentificationScreen';
 import OperationalScreen from '@/components/frete/screens/OperationalScreen';
 import CostsMaintenanceScreen from '@/components/frete/screens/CostsMaintenanceScreen';
@@ -75,12 +79,44 @@ const DEFAULT_VEHICLE: VehicleData = {
 };
 
 const Index = () => {
+  const navigate = useNavigate();
+  const { user, loading: authLoading, signOut } = useAuth();
+  const { vehicles, saveVehicle } = useVehicles();
+  const { saveTrip } = useTripHistory();
+
   const [step, setStep] = useState<AppStep>('identification');
   const [vehicle, setVehicle] = useState<VehicleData>(DEFAULT_VEHICLE);
   const [pickups, setPickups] = useState<RoutePoint[]>([{ id: '1', address: '', value: 0, weight: 0 }]);
   const [deliveries, setDeliveries] = useState<RoutePoint[]>([{ id: '1', address: '', value: 0 }]);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Load user profile name if logged in
+  useEffect(() => {
+    if (user?.user_metadata?.full_name && !vehicle.driverName) {
+      setVehicle(prev => ({ ...prev, driverName: user.user_metadata.full_name }));
+    }
+  }, [user]);
+
+  // Load first saved vehicle if available
+  useEffect(() => {
+    if (vehicles.length > 0 && !vehicle.licensePlate) {
+      const v = vehicles[0];
+      setVehicle(prev => ({
+        ...prev,
+        licensePlate: v.license_plate,
+        fuelConsumption: v.fuel_consumption,
+        fuelPrice: v.fuel_price,
+        axles: v.axles,
+        cargoCapacity: v.cargo_capacity,
+        drivingHoursPerDay: v.driving_hours_per_day || 9,
+        driverCommissionPercentage: v.driver_commission_percentage || 10,
+        driverSalaryMonthly: v.driver_salary_monthly || undefined,
+        insuranceYearly: v.insurance_yearly || undefined,
+        registrationYearly: v.registration_yearly || undefined,
+      }));
+    }
+  }, [vehicles]);
 
   const handleVehicleUpdate = (field: string, value: number | string | boolean) => {
     setVehicle(prev => ({ ...prev, [field]: value }));
@@ -100,9 +136,11 @@ const Index = () => {
 
   const totalFreight = [...pickups, ...deliveries].reduce((acc, p) => acc + (p.value || 0), 0);
 
-  const handleCalculate = () => {
+  const handleCalculate = async () => {
     setLoading(true);
-    setTimeout(() => {
+
+    // Simulate calculation
+    setTimeout(async () => {
       const distance = 1500;
       const duration = 24;
       const days = Math.ceil(duration / vehicle.drivingHoursPerDay);
@@ -114,7 +152,7 @@ const Index = () => {
       const totalCost = fuelCost + tollCost + commission + maintenance + fixed;
       const netProfit = totalFreight - totalCost;
 
-      setResult({
+      const simulationResult: SimulationResult = {
         totalDistanceKm: distance,
         totalDurationHours: duration,
         totalDurationDays: days,
@@ -128,10 +166,68 @@ const Index = () => {
         viabilityScore: netProfit < 0 ? 'low' : netProfit / totalFreight > 0.25 ? 'high' : 'medium',
         viabilityMessage: netProfit < 0 ? 'Atenção: Esta rota pode gerar prejuízo.' : 'Viagem com boa margem de lucro.',
         routeSuggestions: 'Verifique postos de combustível na rota para melhores preços.',
-      });
+      };
+
+      setResult(simulationResult);
       setStep('dashboard');
+
+      if (user) {
+        await saveTrip({
+          license_plate: vehicle.licensePlate,
+          pickups: JSON.parse(JSON.stringify(pickups)),
+          deliveries: JSON.parse(JSON.stringify(deliveries)),
+          total_distance_km: distance,
+          total_duration_hours: duration,
+          total_duration_days: days,
+          estimated_fuel_cost: fuelCost,
+          estimated_toll_cost: tollCost,
+          driver_commission_cost: commission,
+          estimated_maintenance_cost: maintenance,
+          estimated_fixed_cost: fixed,
+          total_freight_income: totalFreight,
+          net_profit: netProfit,
+          viability_score: simulationResult.viabilityScore,
+          viability_message: simulationResult.viabilityMessage,
+          route_suggestions: simulationResult.routeSuggestions,
+        });
+      }
+
       setLoading(false);
     }, 1500);
+  };
+
+  const handleSaveVehicle = async () => {
+    if (!vehicle.licensePlate) return;
+    
+    await saveVehicle({
+      license_plate: vehicle.licensePlate,
+      fuel_consumption: vehicle.fuelConsumption,
+      fuel_price: vehicle.fuelPrice,
+      axles: vehicle.axles,
+      cargo_capacity: vehicle.cargoCapacity,
+      driving_hours_per_day: vehicle.drivingHoursPerDay,
+      driver_commission_percentage: vehicle.driverCommissionPercentage,
+      driver_salary_monthly: vehicle.driverSalaryMonthly,
+      driver_salary_include_13th: vehicle.driverSalaryInclude13th,
+      asset_value: vehicle.assetValue,
+      annual_depreciation_rate: vehicle.annualDepreciationRate,
+      insurance_yearly: vehicle.insuranceYearly,
+      registration_yearly: vehicle.registrationYearly,
+      ref_tire_price_new: vehicle.refTirePriceNew,
+      ref_tire_lifespan_new: vehicle.refTireLifespanNew,
+      ref_tire_price_remold: vehicle.refTirePriceRemold,
+      ref_tire_lifespan_remold: vehicle.refTireLifespanRemold,
+      tire_steer_qty_new: vehicle.tireSteerQtyNew,
+      tire_steer_qty_remold: vehicle.tireSteerQtyRemold,
+      tire_drive_qty_new: vehicle.tireDriveQtyNew,
+      tire_drive_qty_remold: vehicle.tireDriveQtyRemold,
+      tire_trailer_qty_new: vehicle.tireTrailerQtyNew,
+      tire_trailer_qty_remold: vehicle.tireTrailerQtyRemold,
+      oil_change_interval_km: vehicle.oilChangeIntervalKm,
+      last_oil_change_cost: vehicle.lastOilChangeCost,
+      filter_change_interval_km: vehicle.filterChangeIntervalKm,
+      last_filter_change_cost: vehicle.lastFilterChangeCost,
+    });
   };
 
   const handleReset = () => {
@@ -140,6 +236,16 @@ const Index = () => {
     setPickups([{ id: '1', address: '', value: 0, weight: 0 }]);
     setDeliveries([{ id: '1', address: '', value: 0 }]);
   };
+
+  const handleLogin = () => navigate('/auth');
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-[hsl(var(--background))] flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[hsl(var(--background))]">
@@ -151,9 +257,29 @@ const Index = () => {
               Frete<span className="text-blue-600">Certo</span>
             </h1>
           </div>
-          <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] text-sm">
-            <User size={16} />
-            <span>{vehicle.driverName || 'Motorista'}</span>
+          <div className="flex items-center gap-3">
+            {user ? (
+              <>
+                <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))] text-sm bg-[hsl(var(--secondary))] px-3 py-1.5 rounded-full">
+                  <User size={14} />
+                  <span>{vehicle.driverName || user.email}</span>
+                </div>
+                <button
+                  onClick={signOut}
+                  className="p-2 text-[hsl(var(--muted-foreground))] hover:text-red-500 transition-colors"
+                  title="Sair"
+                >
+                  <LogOut size={18} />
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={handleLogin}
+                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                Entrar
+              </button>
+            )}
           </div>
         </div>
       </header>
@@ -164,6 +290,7 @@ const Index = () => {
           driverName={vehicle.driverName}
           onNameChange={(name) => handleVehicleUpdate('driverName', name)}
           onContinue={() => setStep('operational')}
+          onLogin={handleLogin}
         />
       )}
       {step === 'operational' && (
@@ -178,7 +305,12 @@ const Index = () => {
         <CostsMaintenanceScreen
           data={vehicle}
           onUpdate={handleVehicleUpdate}
-          onNext={() => setStep('pickup')}
+          onNext={() => {
+            if (user && vehicle.licensePlate) {
+              handleSaveVehicle();
+            }
+            setStep('pickup');
+          }}
           onBack={() => setStep('operational')}
         />
       )}
