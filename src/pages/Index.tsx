@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useVehicles, SavedVehicle } from '@/hooks/useVehicles';
 import { useTripHistory } from '@/hooks/useTripHistory';
+import { useRouteCalculation } from '@/hooks/useRouteCalculation';
 import IdentificationScreen from '@/components/frete/screens/IdentificationScreen';
 import OperationalScreen from '@/components/frete/screens/OperationalScreen';
 import CostsMaintenanceScreen from '@/components/frete/screens/CostsMaintenanceScreen';
@@ -91,6 +92,7 @@ const Index = () => {
   const { isAdmin } = useUserRole();
   const { vehicles, saveVehicle, updateVehicle } = useVehicles();
   const { saveTrip } = useTripHistory();
+  const { calculateRoute, loading: routeLoading } = useRouteCalculation();
 
   const [step, setStep] = useState<AppStep>('identification');
   const [vehicle, setVehicle] = useState<VehicleData>(DEFAULT_VEHICLE);
@@ -98,7 +100,7 @@ const Index = () => {
   const [pickups, setPickups] = useState<RoutePoint[]>([{ id: '1', address: '', value: 0, weight: 0 }]);
   const [deliveries, setDeliveries] = useState<RoutePoint[]>([{ id: '1', address: '', value: 0 }]);
   const [result, setResult] = useState<SimulationResult | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [calculating, setCalculating] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
 
   // Load user profile name if logged in
@@ -180,24 +182,33 @@ const Index = () => {
   const totalFreight = [...pickups, ...deliveries].reduce((acc, p) => acc + (p.value || 0), 0);
 
   const handleCalculate = async () => {
-    setLoading(true);
+    setCalculating(true);
 
-    // Simulate calculation
-    setTimeout(async () => {
-      const distance = 1500;
-      const duration = 24;
-      const days = Math.ceil(duration / vehicle.drivingHoursPerDay);
+    try {
+      // Call Google Maps API via edge function
+      const routeResult = await calculateRoute(pickups, deliveries, vehicle.axles);
+      
+      if (!routeResult) {
+        setCalculating(false);
+        return;
+      }
+
+      const distance = routeResult.totalDistanceKm;
+      const durationHours = routeResult.totalDurationHours;
+      const days = Math.ceil(durationHours / vehicle.drivingHoursPerDay);
+      
+      // Calculate costs based on real distance
       const fuelCost = (distance / vehicle.fuelConsumption) * vehicle.fuelPrice;
-      const tollCost = distance * 0.14 * vehicle.axles;
+      const tollCost = routeResult.estimatedTollCost; // Use estimated toll from API
       const commission = totalFreight * (vehicle.driverCommissionPercentage / 100);
-      const maintenance = distance * 0.20;
+      const maintenance = distance * 0.20; // R$0.20 per km for maintenance
       const fixed = ((vehicle.insuranceYearly || 0) + (vehicle.registrationYearly || 0) + ((vehicle.driverSalaryMonthly || 0) * 13)) / 365 * days;
       const totalCost = fuelCost + tollCost + commission + maintenance + fixed;
       const netProfit = totalFreight - totalCost;
 
       const simulationResult: SimulationResult = {
         totalDistanceKm: distance,
-        totalDurationHours: duration,
+        totalDurationHours: durationHours,
         totalDurationDays: days,
         estimatedFuelCost: fuelCost,
         estimatedTollCost: tollCost,
@@ -208,7 +219,7 @@ const Index = () => {
         netProfit,
         viabilityScore: netProfit < 0 ? 'low' : netProfit / totalFreight > 0.25 ? 'high' : 'medium',
         viabilityMessage: netProfit < 0 ? 'Atenção: Esta rota pode gerar prejuízo.' : 'Viagem com boa margem de lucro.',
-        routeSuggestions: 'Verifique postos de combustível na rota para melhores preços.',
+        routeSuggestions: routeResult.summary ? `Rota via ${routeResult.summary}. Verifique postos de combustível na rota para melhores preços.` : 'Verifique postos de combustível na rota para melhores preços.',
       };
 
       setResult(simulationResult);
@@ -220,7 +231,7 @@ const Index = () => {
           pickups: JSON.parse(JSON.stringify(pickups)),
           deliveries: JSON.parse(JSON.stringify(deliveries)),
           total_distance_km: distance,
-          total_duration_hours: duration,
+          total_duration_hours: durationHours,
           total_duration_days: days,
           estimated_fuel_cost: fuelCost,
           estimated_toll_cost: tollCost,
@@ -234,9 +245,11 @@ const Index = () => {
           route_suggestions: simulationResult.routeSuggestions,
         });
       }
-
-      setLoading(false);
-    }, 1500);
+    } catch (error) {
+      console.error('Error calculating route:', error);
+    } finally {
+      setCalculating(false);
+    }
   };
 
   const handleSaveVehicle = async () => {
@@ -461,7 +474,7 @@ const Index = () => {
           onUpdateDelivery={updateDelivery}
           onCalculate={() => setStep('summary')}
           onBack={() => setStep('pickup')}
-          loading={loading}
+          loading={calculating || routeLoading}
         />
       )}
       {step === 'summary' && (
@@ -473,7 +486,7 @@ const Index = () => {
           onCalculate={handleCalculate}
           onBack={() => setStep('delivery')}
           onEditVehicle={() => setStep('operational')}
-          loading={loading}
+          loading={calculating || routeLoading}
         />
       )}
       {step === 'dashboard' && result && (
