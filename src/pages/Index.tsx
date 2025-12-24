@@ -627,6 +627,7 @@ const Index = () => {
           onEditVehicle={() => setStep('operational')}
           loading={calculating || routeLoading}
           userCredits={userCredits}
+          isLoggedIn={!!user}
         />
       )}
       {step === 'dashboard' && result && (
