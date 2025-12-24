@@ -6,6 +6,9 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useVehicles, SavedVehicle } from '@/hooks/useVehicles';
 import { useTripHistory } from '@/hooks/useTripHistory';
 import { useRouteCalculation } from '@/hooks/useRouteCalculation';
+import { useCredits } from '@/hooks/useCredits';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import IdentificationScreen from '@/components/frete/screens/IdentificationScreen';
 import OperationalScreen from '@/components/frete/screens/OperationalScreen';
 import CostsMaintenanceScreen from '@/components/frete/screens/CostsMaintenanceScreen';
@@ -60,6 +63,22 @@ interface RoutePoint {
   weight?: number;
 }
 
+interface AIAnalysis {
+  viabilityScore: 'high' | 'medium' | 'low';
+  viabilityMessage: string;
+  profitMargin: number;
+  alerts: string[];
+  optimizationTips: string[];
+  marketAnalysis: string;
+  returnAnalysis?: {
+    hasReturnLoad: boolean;
+    estimatedReturnCost: number;
+    recommendation: string;
+  };
+  suggestedFreightValue?: number;
+  summary: string;
+}
+
 interface SimulationResult {
   totalDistanceKm: number;
   totalDurationHours: number;
@@ -69,11 +88,13 @@ interface SimulationResult {
   driverCommissionCost: number;
   estimatedMaintenanceCost: number;
   estimatedFixedCost?: number;
+  returnCost?: number;
   totalFreightIncome: number;
   netProfit: number;
   viabilityScore: 'high' | 'medium' | 'low';
   viabilityMessage: string;
   routeSuggestions?: string;
+  aiAnalysis?: AIAnalysis;
 }
 
 const DEFAULT_VEHICLE: VehicleData = {
@@ -92,7 +113,8 @@ const Index = () => {
   const { isAdmin } = useUserRole();
   const { vehicles, saveVehicle, updateVehicle } = useVehicles();
   const { saveTrip } = useTripHistory();
-  const { calculateRoute, loading: routeLoading } = useRouteCalculation();
+  const { calculateRoute, loading: routeLoading, result: routeResult } = useRouteCalculation();
+  const { balance: userCredits, refreshBalance } = useCredits();
 
   const [step, setStep] = useState<AppStep>('identification');
   const [vehicle, setVehicle] = useState<VehicleData>(DEFAULT_VEHICLE);
@@ -102,6 +124,7 @@ const Index = () => {
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [calculating, setCalculating] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [estimatedDistance, setEstimatedDistance] = useState<number | undefined>(undefined);
 
   // Load user profile name if logged in
   useEffect(() => {
@@ -181,30 +204,100 @@ const Index = () => {
 
   const totalFreight = [...pickups, ...deliveries].reduce((acc, p) => acc + (p.value || 0), 0);
 
-  const handleCalculate = async () => {
+  // Pre-calculate route to get estimated distance for return cost calculation
+  const preCalculateRoute = async () => {
+    try {
+      const routeRes = await calculateRoute(pickups, deliveries, vehicle.axles, vehicle.cargoCapacity);
+      if (routeRes) {
+        setEstimatedDistance(routeRes.totalDistanceKm);
+      }
+    } catch (error) {
+      console.error('Error pre-calculating route:', error);
+    }
+  };
+
+  // Pre-calculate when moving to summary step
+  useEffect(() => {
+    if (step === 'summary') {
+      preCalculateRoute();
+    }
+  }, [step]);
+
+  const handleCalculate = async (includeReturn: boolean = false, returnCost: number = 0) => {
     setCalculating(true);
 
     try {
       // Call Google Maps API + TollGuru via edge function
-      const routeResult = await calculateRoute(pickups, deliveries, vehicle.axles, vehicle.cargoCapacity);
+      const routeCalcResult = await calculateRoute(pickups, deliveries, vehicle.axles, vehicle.cargoCapacity);
       
-      if (!routeResult) {
+      if (!routeCalcResult) {
         setCalculating(false);
         return;
       }
 
-      const distance = routeResult.totalDistanceKm;
-      const durationHours = routeResult.totalDurationHours;
+      const distance = routeCalcResult.totalDistanceKm;
+      const durationHours = routeCalcResult.totalDurationHours;
       const days = Math.ceil(durationHours / vehicle.drivingHoursPerDay);
       
       // Calculate costs based on real distance
       const fuelCost = (distance / vehicle.fuelConsumption) * vehicle.fuelPrice;
-      const tollCost = routeResult.estimatedTollCost; // Use estimated toll from API
+      const tollCost = routeCalcResult.estimatedTollCost;
       const commission = totalFreight * (vehicle.driverCommissionPercentage / 100);
-      const maintenance = distance * 0.20; // R$0.20 per km for maintenance
+      const maintenance = distance * 0.20;
       const fixed = ((vehicle.insuranceYearly || 0) + (vehicle.registrationYearly || 0) + ((vehicle.driverSalaryMonthly || 0) * 13)) / 365 * days;
-      const totalCost = fuelCost + tollCost + commission + maintenance + fixed;
+      const totalCost = fuelCost + tollCost + commission + maintenance + fixed + (includeReturn ? returnCost : 0);
       const netProfit = totalFreight - totalCost;
+
+      // Get origin and destination cities for AI analysis
+      const originCity = pickups[0]?.address || 'Origem não informada';
+      const destinationCity = deliveries[deliveries.length - 1]?.address || 'Destino não informado';
+
+      // Call AI analysis
+      let aiAnalysis: AIAnalysis | undefined;
+      try {
+        const { data: aiData, error: aiError } = await supabase.functions.invoke('analyze-route-ai', {
+          body: {
+            routeData: {
+              totalDistanceKm: distance,
+              totalDurationHours: durationHours,
+              totalDurationDays: days,
+              estimatedFuelCost: fuelCost,
+              estimatedTollCost: tollCost,
+              driverCommissionCost: commission,
+              estimatedMaintenanceCost: maintenance,
+              estimatedFixedCost: fixed,
+              totalFreightIncome: totalFreight,
+              netProfit,
+              originCity,
+              destinationCity,
+            },
+            vehicleData: {
+              axles: vehicle.axles,
+              fuelConsumption: vehicle.fuelConsumption,
+              cargoCapacity: vehicle.cargoCapacity,
+            },
+            includeReturn,
+            returnCost,
+          },
+        });
+
+        if (aiError) {
+          console.error('AI analysis error:', aiError);
+          if (aiError.message?.includes('INSUFFICIENT_CREDITS')) {
+            toast.error('Créditos insuficientes para análise com IA');
+            setCalculating(false);
+            return;
+          }
+          toast.error('Erro na análise com IA. Usando análise básica.');
+        } else if (aiData?.success) {
+          aiAnalysis = aiData.analysis;
+          toast.success('Análise com IA concluída! (1 crédito usado)');
+          refreshBalance();
+        }
+      } catch (aiErr) {
+        console.error('AI call failed:', aiErr);
+        toast.error('Erro ao chamar serviço de IA. Usando análise básica.');
+      }
 
       const simulationResult: SimulationResult = {
         totalDistanceKm: distance,
@@ -215,11 +308,13 @@ const Index = () => {
         driverCommissionCost: commission,
         estimatedMaintenanceCost: maintenance,
         estimatedFixedCost: fixed,
+        returnCost: includeReturn ? returnCost : undefined,
         totalFreightIncome: totalFreight,
         netProfit,
-        viabilityScore: netProfit < 0 ? 'low' : netProfit / totalFreight > 0.25 ? 'high' : 'medium',
-        viabilityMessage: netProfit < 0 ? 'Atenção: Esta rota pode gerar prejuízo.' : 'Viagem com boa margem de lucro.',
-        routeSuggestions: routeResult.summary ? `Rota via ${routeResult.summary}. Verifique postos de combustível na rota para melhores preços.` : 'Verifique postos de combustível na rota para melhores preços.',
+        viabilityScore: aiAnalysis?.viabilityScore || (netProfit < 0 ? 'low' : netProfit / totalFreight > 0.25 ? 'high' : 'medium'),
+        viabilityMessage: aiAnalysis?.viabilityMessage || (netProfit < 0 ? 'Atenção: Esta rota pode gerar prejuízo.' : 'Viagem com boa margem de lucro.'),
+        routeSuggestions: aiAnalysis?.summary || (routeCalcResult.summary ? `Rota via ${routeCalcResult.summary}` : undefined),
+        aiAnalysis,
       };
 
       setResult(simulationResult);
@@ -247,6 +342,7 @@ const Index = () => {
       }
     } catch (error) {
       console.error('Error calculating route:', error);
+      toast.error('Erro ao calcular rota');
     } finally {
       setCalculating(false);
     }
@@ -486,14 +582,20 @@ const Index = () => {
       )}
       {step === 'summary' && (
         <TripSummaryScreen
-          vehicleInfo={vehicle}
+          vehicleInfo={{
+            ...vehicle,
+            fuelConsumption: vehicle.fuelConsumption,
+            fuelPrice: vehicle.fuelPrice,
+          }}
           pickups={pickups}
           deliveries={deliveries}
           totalFreight={totalFreight}
+          estimatedDistance={estimatedDistance}
           onCalculate={handleCalculate}
           onBack={() => setStep('delivery')}
           onEditVehicle={() => setStep('operational')}
           loading={calculating || routeLoading}
+          userCredits={userCredits}
         />
       )}
       {step === 'dashboard' && result && (

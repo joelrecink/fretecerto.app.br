@@ -1,5 +1,7 @@
-import React from 'react';
-import { FileText, Truck, MapPin, Package, Navigation, ArrowLeft, Calculator, Edit3, Mic } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Truck, MapPin, Navigation, ArrowLeft, Calculator, Edit3, Sparkles, RotateCcw, Info } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface RoutePoint {
   id: string;
@@ -13,14 +15,18 @@ interface TripSummaryScreenProps {
     licensePlate?: string;
     axles: number;
     driverName: string;
+    fuelConsumption: number;
+    fuelPrice: number;
   };
   pickups: RoutePoint[];
   deliveries: RoutePoint[];
   totalFreight: number;
-  onCalculate: () => void;
+  estimatedDistance?: number;
+  onCalculate: (includeReturn: boolean, returnCost: number) => void;
   onBack: () => void;
   onEditVehicle: () => void;
   loading?: boolean;
+  userCredits?: number;
 }
 
 const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
@@ -28,14 +34,33 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
   pickups,
   deliveries,
   totalFreight,
+  estimatedDistance,
   onCalculate,
   onBack,
   onEditVehicle,
   loading = false,
+  userCredits = 0,
 }) => {
+  const [includeReturn, setIncludeReturn] = useState(false);
+  const [estimatedReturnCost, setEstimatedReturnCost] = useState(0);
+
+  // Calculate estimated return cost when toggle is enabled
+  useEffect(() => {
+    if (includeReturn && estimatedDistance && vehicleInfo.fuelConsumption && vehicleInfo.fuelPrice) {
+      // Estimate return cost: fuel + estimated maintenance
+      const fuelCost = (estimatedDistance / vehicleInfo.fuelConsumption) * vehicleInfo.fuelPrice;
+      const maintenanceCost = estimatedDistance * 0.20; // R$0.20/km
+      setEstimatedReturnCost(fuelCost + maintenanceCost);
+    } else {
+      setEstimatedReturnCost(0);
+    }
+  }, [includeReturn, estimatedDistance, vehicleInfo.fuelConsumption, vehicleInfo.fuelPrice]);
+
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
   };
+
+  const hasInsufficientCredits = userCredits < 1;
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-[hsl(var(--background))] pb-32">
@@ -45,12 +70,38 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
           <div>
             <span className="text-xs text-blue-600 font-bold uppercase tracking-wider">CONFIRMAÇÃO FINAL</span>
             <h1 className="text-2xl font-bold text-[hsl(var(--foreground))]">Resumo da Viagem</h1>
-            <p className="text-sm text-[hsl(var(--muted-foreground))]">Confira os detalhes da viagem antes de calcular a simulação</p>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">Confira os detalhes antes de calcular com IA</p>
           </div>
           <div className="text-right">
             <span className="text-xs text-[hsl(var(--muted-foreground))] uppercase">Frete estimado</span>
             <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalFreight)}</p>
           </div>
+        </div>
+
+        {/* AI Credits Info */}
+        <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-2xl p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-violet-100 rounded-xl flex items-center justify-center">
+                <Sparkles size={20} className="text-violet-600" />
+              </div>
+              <div>
+                <p className="font-semibold text-violet-800">Análise com IA</p>
+                <p className="text-sm text-violet-600">Custo: 1 crédito</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-[hsl(var(--muted-foreground))]">Seus créditos</p>
+              <p className={`text-xl font-bold ${hasInsufficientCredits ? 'text-red-600' : 'text-violet-600'}`}>
+                {userCredits}
+              </p>
+            </div>
+          </div>
+          {hasInsufficientCredits && (
+            <p className="mt-3 text-sm text-red-600 bg-red-50 p-2 rounded-lg">
+              ⚠️ Créditos insuficientes. Adquira mais créditos para usar a análise com IA.
+            </p>
+          )}
         </div>
 
         {/* Vehicle Info Card */}
@@ -104,9 +155,6 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
                     {pickup.address || 'Endereço não informado'}
                   </p>
                 </div>
-                <button className="p-2 text-[hsl(var(--muted-foreground))] hover:text-blue-600">
-                  <Mic size={16} />
-                </button>
               </div>
             </div>
           ))}
@@ -127,12 +175,93 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
                     {delivery.address || 'Endereço não informado'}
                   </p>
                 </div>
-                <button className="p-2 text-[hsl(var(--muted-foreground))] hover:text-blue-600">
-                  <Mic size={16} />
-                </button>
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Return Toggle Card */}
+        <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] p-6">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center">
+                <RotateCcw size={20} className="text-amber-600" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <p className="font-semibold text-[hsl(var(--foreground))]">Incluir retorno vazio</p>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Info size={14} className="text-[hsl(var(--muted-foreground))]" />
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs">Se não houver carga de retorno, inclua os custos de voltar vazio no cálculo.</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+                <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                  Considerar custo de retorno sem carga
+                </p>
+              </div>
+            </div>
+            <Switch
+              checked={includeReturn}
+              onCheckedChange={setIncludeReturn}
+            />
+          </div>
+
+          {/* Return Cost Estimate */}
+          {includeReturn && (
+            <div className="mt-4 pt-4 border-t border-[hsl(var(--border))]">
+              <div className="flex items-center justify-between bg-amber-50 p-4 rounded-xl">
+                <div>
+                  <p className="text-sm text-amber-800 font-medium">Custo estimado de retorno</p>
+                  <p className="text-xs text-amber-600">
+                    Combustível + manutenção ({estimatedDistance?.toLocaleString('pt-BR') || '—'} km)
+                  </p>
+                </div>
+                <p className="text-xl font-bold text-amber-700">
+                  {formatCurrency(estimatedReturnCost)}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* AI Analysis Features */}
+        <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-2xl border border-slate-200 p-6">
+          <h3 className="font-bold text-[hsl(var(--foreground))] mb-4 flex items-center gap-2">
+            <Sparkles size={18} className="text-violet-600" />
+            A análise com IA inclui:
+          </h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+              <span className="w-2 h-2 bg-emerald-500 rounded-full"></span>
+              Score de viabilidade
+            </div>
+            <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+              <span className="w-2 h-2 bg-blue-500 rounded-full"></span>
+              Margem de lucro
+            </div>
+            <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+              <span className="w-2 h-2 bg-amber-500 rounded-full"></span>
+              Alertas de prejuízo
+            </div>
+            <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+              <span className="w-2 h-2 bg-purple-500 rounded-full"></span>
+              Dicas de otimização
+            </div>
+            <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+              <span className="w-2 h-2 bg-pink-500 rounded-full"></span>
+              Análise de mercado
+            </div>
+            <div className="flex items-center gap-2 text-sm text-[hsl(var(--muted-foreground))]">
+              <span className="w-2 h-2 bg-indigo-500 rounded-full"></span>
+              Valor sugerido
+            </div>
+          </div>
         </div>
       </div>
 
@@ -146,19 +275,20 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
             <ArrowLeft size={24} />
           </button>
           <button
-            onClick={onCalculate}
-            disabled={loading}
-            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 text-lg transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
+            onClick={() => onCalculate(includeReturn, estimatedReturnCost)}
+            disabled={loading || hasInsufficientCredits}
+            className="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 text-lg transition-all active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                Calculando...
+                Analisando com IA...
               </>
             ) : (
               <>
-                <Calculator size={20} />
-                Calcular Frete Final
+                <Sparkles size={20} />
+                Calcular com IA
+                <span className="text-sm opacity-80">(1 crédito)</span>
               </>
             )}
           </button>
