@@ -289,20 +289,20 @@ const Index = () => {
         <IdentificationScreen
           driverName={vehicle.driverName}
           onNameChange={(name) => handleVehicleUpdate('driverName', name)}
-          onContinue={() => setStep('operational')}
+          onContinue={() => setStep('costs')}
           onLogin={handleLogin}
-        />
-      )}
-      {step === 'operational' && (
-        <OperationalScreen
-          data={vehicle}
-          onUpdate={handleVehicleUpdate}
-          onNext={() => setStep('costs')}
-          onBack={() => setStep('identification')}
         />
       )}
       {step === 'costs' && (
         <CostsMaintenanceScreen
+          data={vehicle}
+          onUpdate={handleVehicleUpdate}
+          onNext={() => setStep('operational')}
+          onBack={() => setStep('identification')}
+        />
+      )}
+      {step === 'operational' && (
+        <OperationalScreen
           data={vehicle}
           onUpdate={handleVehicleUpdate}
           onNext={() => {
@@ -311,7 +311,7 @@ const Index = () => {
             }
             setStep('pickup');
           }}
-          onBack={() => setStep('operational')}
+          onBack={() => setStep('costs')}
         />
       )}
       {step === 'pickup' && (
