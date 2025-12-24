@@ -92,12 +92,15 @@ serve(async (req) => {
 
     console.log('Stripe customer:', customerId);
 
-    // Create Stripe Checkout Session with PIX
+    // Create Stripe Checkout Session
+    // Note: PIX requires enabling in Stripe dashboard for Brazilian accounts
+    // Using automatic payment methods to let Stripe show available methods
     const origin = req.headers.get('origin') || 'http://localhost:8080';
     
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
-      payment_method_types: ['pix', 'card'],
+      // Let Stripe automatically determine available payment methods
+      // To enable PIX, activate it in: https://dashboard.stripe.com/account/payments/settings
       line_items: [
         {
           price_data: {
