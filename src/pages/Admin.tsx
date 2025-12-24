@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, Truck, MapPin, Shield, TrendingUp, Search, Trash2, UserCog } from 'lucide-react';
+import { ArrowLeft, Users, Truck, MapPin, Shield, TrendingUp, Search, Trash2, UserCog, Coins } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import AdminCredits from '@/components/admin/AdminCredits';
 
-type AdminTab = 'users' | 'vehicles' | 'trips' | 'stats';
+type AdminTab = 'users' | 'vehicles' | 'trips' | 'credits' | 'stats';
 
 interface UserWithRole {
   id: string;
@@ -151,6 +152,7 @@ const Admin = () => {
     { id: 'users', label: 'Usuários', icon: Users },
     { id: 'vehicles', label: 'Veículos', icon: Truck },
     { id: 'trips', label: 'Viagens', icon: MapPin },
+    { id: 'credits', label: 'Créditos', icon: Coins },
     { id: 'stats', label: 'Estatísticas', icon: TrendingUp },
   ];
 
@@ -368,6 +370,11 @@ const Admin = () => {
                   </table>
                 </div>
               </div>
+            )}
+
+            {/* Credits Tab */}
+            {activeTab === 'credits' && (
+              <AdminCredits searchTerm={searchTerm} />
             )}
 
             {/* Stats Tab */}
