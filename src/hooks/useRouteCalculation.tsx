@@ -36,7 +36,8 @@ interface UseRouteCalculationReturn {
   calculateRoute: (
     pickups: RoutePoint[],
     deliveries: RoutePoint[],
-    axles: number
+    axles: number,
+    cargoCapacity?: number
   ) => Promise<RouteCalculationResult | null>;
   loading: boolean;
   error: string | null;
@@ -51,7 +52,8 @@ export const useRouteCalculation = (): UseRouteCalculationReturn => {
   const calculateRoute = useCallback(async (
     pickups: RoutePoint[],
     deliveries: RoutePoint[],
-    axles: number
+    axles: number,
+    cargoCapacity?: number
   ): Promise<RouteCalculationResult | null> => {
     setLoading(true);
     setError(null);
@@ -68,7 +70,8 @@ export const useRouteCalculation = (): UseRouteCalculationReturn => {
       console.log('Calculating route with:', {
         pickups: validPickups.map(p => p.address),
         deliveries: validDeliveries.map(d => d.address),
-        axles
+        axles,
+        cargoCapacity
       });
 
       const { data, error: fnError } = await supabase.functions.invoke('calculate-route', {
@@ -76,6 +79,7 @@ export const useRouteCalculation = (): UseRouteCalculationReturn => {
           origins: validPickups.map(p => ({ address: p.address })),
           destinations: validDeliveries.map(d => ({ address: d.address })),
           axles,
+          cargoCapacity,
         },
       });
 

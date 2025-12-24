@@ -15,11 +15,17 @@ interface RouteRequest {
   origins: RoutePoint[];
   destinations: RoutePoint[];
   axles: number;
+  cargoCapacity?: number; // in tons
 }
 
-interface TollInfo {
+interface TollDetail {
+  id: number;
   name: string;
-  price: number;
+  road: string;
+  state: string;
+  tagCost: number;
+  cashCost: number;
+  currency: string;
 }
 
 serve(async (req) => {
@@ -29,15 +35,17 @@ serve(async (req) => {
   }
 
   try {
-    const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
-    if (!apiKey) {
+    const googleApiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
+    const tollGuruApiKey = Deno.env.get('TOLLGURU_API_KEY');
+    
+    if (!googleApiKey) {
       console.error('GOOGLE_MAPS_API_KEY not configured');
       throw new Error('Google Maps API key not configured');
     }
 
-    const { origins, destinations, axles } = await req.json() as RouteRequest;
+    const { origins, destinations, axles, cargoCapacity } = await req.json() as RouteRequest;
     
-    console.log('Calculating route for:', { origins, destinations, axles });
+    console.log('Calculating route for:', { origins, destinations, axles, cargoCapacity });
 
     // Build all waypoints in order: origins -> destinations
     const allPoints = [...origins, ...destinations];
@@ -52,7 +60,7 @@ serve(async (req) => {
     const waypoints = allPoints.slice(1, -1).map(p => p.address);
 
     // Call Google Directions API
-    let directionsUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&key=${apiKey}&language=pt-BR&region=br`;
+    let directionsUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&key=${googleApiKey}&language=pt-BR&region=br`;
     
     if (waypoints.length > 0) {
       directionsUrl += `&waypoints=${waypoints.map(w => encodeURIComponent(w)).join('|')}`;
@@ -89,25 +97,6 @@ serve(async (req) => {
     const totalDistanceKm = totalDistanceMeters / 1000;
     const totalDurationHours = totalDurationSeconds / 3600;
 
-    // Estimate tolls based on Brazilian highway toll data
-    // Average toll cost per km varies by road type and axles
-    // Using estimates: 2-axle: R$0.15/km, 3-axle: R$0.22/km, 4-axle: R$0.30/km, 5-axle: R$0.38/km, 6+: R$0.45/km
-    const tollRatePerKm: Record<number, number> = {
-      2: 0.15,
-      3: 0.22,
-      4: 0.30,
-      5: 0.38,
-      6: 0.45,
-      7: 0.52,
-      9: 0.65,
-    };
-    
-    const axleRate = tollRatePerKm[axles] || tollRatePerKm[6];
-    
-    // Estimate that ~60% of Brazilian interstate routes have tolls
-    const tollableDistance = totalDistanceKm * 0.6;
-    const estimatedTollCost = tollableDistance * axleRate;
-
     // Get encoded polyline for map display
     const polyline = route.overview_polyline?.points || null;
 
@@ -132,11 +121,117 @@ serve(async (req) => {
       });
     }
 
+    // Calculate tolls using TollGuru API if available
+    let estimatedTollCost = 0;
+    let tollDetails: TollDetail[] = [];
+    let tollSource = 'estimated';
+
+    if (tollGuruApiKey && polyline) {
+      try {
+        console.log('Calling TollGuru API for toll calculation...');
+        
+        // Map axles to TollGuru vehicle type
+        // TollGuru vehicle types for trucks: 2AxlesTruck, 3AxlesTruck, 4AxlesTruck, 5AxlesTruck, 6AxlesTruck, 7AxlesTruck
+        const vehicleType = axles >= 7 ? '7AxlesTruck' : 
+                           axles >= 6 ? '6AxlesTruck' :
+                           axles >= 5 ? '5AxlesTruck' :
+                           axles >= 4 ? '4AxlesTruck' :
+                           axles >= 3 ? '3AxlesTruck' : '2AxlesTruck';
+
+        const tollGuruBody = {
+          source: 'google',
+          polyline: polyline,
+          vehicle: {
+            type: vehicleType,
+            axles: axles,
+            weight: cargoCapacity ? {
+              value: cargoCapacity,
+              unit: 'ton'
+            } : undefined
+          }
+        };
+
+        console.log('TollGuru request body:', JSON.stringify(tollGuruBody, null, 2));
+
+        const tollGuruResponse = await fetch('https://apis.tollguru.com/toll/v2/complete-polyline-from-mapping-service', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': tollGuruApiKey,
+          },
+          body: JSON.stringify(tollGuruBody),
+        });
+
+        if (tollGuruResponse.ok) {
+          const tollGuruData = await tollGuruResponse.json();
+          console.log('TollGuru response status:', tollGuruResponse.status);
+          
+          if (tollGuruData.route && tollGuruData.route.costs) {
+            // Get the tag cost (most common for trucks in Brazil)
+            const costs = tollGuruData.route.costs;
+            estimatedTollCost = costs.tag || costs.cash || costs.licensePlate || 0;
+            
+            // Convert to BRL if needed (TollGuru returns in local currency)
+            // For Brazil, it should already be in BRL
+            tollSource = 'tollguru';
+            
+            console.log('TollGuru toll costs:', costs);
+            
+            // Extract toll details
+            if (tollGuruData.route.tolls && Array.isArray(tollGuruData.route.tolls)) {
+              tollDetails = tollGuruData.route.tolls.map((toll: any) => ({
+                id: toll.id,
+                name: toll.name,
+                road: toll.road || '',
+                state: toll.state || '',
+                tagCost: toll.tagCost || 0,
+                cashCost: toll.cashCost || 0,
+                currency: toll.currency || 'BRL',
+              }));
+            }
+          } else {
+            console.log('TollGuru: No tolls found on route or different response structure');
+            console.log('TollGuru full response:', JSON.stringify(tollGuruData, null, 2));
+          }
+        } else {
+          const errorText = await tollGuruResponse.text();
+          console.error('TollGuru API error:', tollGuruResponse.status, errorText);
+        }
+      } catch (tollError) {
+        console.error('Error calling TollGuru API:', tollError);
+      }
+    }
+
+    // Fallback to estimated toll calculation if TollGuru fails or is not configured
+    if (tollSource === 'estimated') {
+      console.log('Using estimated toll calculation (TollGuru not available or failed)');
+      
+      // Estimate tolls based on Brazilian highway toll data
+      // Average toll cost per km varies by road type and axles
+      const tollRatePerKm: Record<number, number> = {
+        2: 0.15,
+        3: 0.22,
+        4: 0.30,
+        5: 0.38,
+        6: 0.45,
+        7: 0.52,
+        9: 0.65,
+      };
+      
+      const axleRate = tollRatePerKm[axles] || tollRatePerKm[6];
+      
+      // Estimate that ~60% of Brazilian interstate routes have tolls
+      const tollableDistance = totalDistanceKm * 0.6;
+      estimatedTollCost = tollableDistance * axleRate;
+    }
+
     const result = {
       success: true,
       totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
       totalDurationHours: Math.round(totalDurationHours * 10) / 10,
       estimatedTollCost: Math.round(estimatedTollCost * 100) / 100,
+      tollSource,
+      tollDetails,
       routeDetails,
       polyline,
       geocodedPoints,
@@ -148,6 +243,8 @@ serve(async (req) => {
       distance: result.totalDistanceKm,
       duration: result.totalDurationHours,
       tolls: result.estimatedTollCost,
+      tollSource: result.tollSource,
+      tollCount: tollDetails.length,
     });
 
     return new Response(JSON.stringify(result), {

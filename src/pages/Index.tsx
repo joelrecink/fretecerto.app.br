@@ -185,8 +185,8 @@ const Index = () => {
     setCalculating(true);
 
     try {
-      // Call Google Maps API via edge function
-      const routeResult = await calculateRoute(pickups, deliveries, vehicle.axles);
+      // Call Google Maps API + TollGuru via edge function
+      const routeResult = await calculateRoute(pickups, deliveries, vehicle.axles, vehicle.cargoCapacity);
       
       if (!routeResult) {
         setCalculating(false);
