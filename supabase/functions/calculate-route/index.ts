@@ -87,11 +87,36 @@ serve(async (req) => {
     const destination = allPoints[allPoints.length - 1].address;
     const waypoints = allPoints.slice(1, -1).map(p => p.address);
 
-    // Call Google Directions API
+    // Define road restrictions based on vehicle size (axles)
+    // Heavy vehicles (6+ axles) should avoid steep roads and certain mountain passes
+    const restrictedRoads: { [key: string]: { minAxles: number; description: string } } = {
+      'Serra do Rio do Rastro': { minAxles: 6, description: 'Íngreme e perigosa para veículos pesados' },
+      'SC-430': { minAxles: 6, description: 'Serra do Rio do Rastro - proibida para veículos pesados' },
+      'Serra do Corvo Branco': { minAxles: 7, description: 'Estrada íngreme com curvas fechadas' },
+      'SC-370': { minAxles: 7, description: 'Serra do Corvo Branco - restrita para veículos muito pesados' },
+      'Rodovia da Morte': { minAxles: 5, description: 'Alto risco para veículos pesados' },
+      'Serra das Araras': { minAxles: 7, description: 'Declive acentuado' },
+      'Via Anchieta subida': { minAxles: 8, description: 'Restrições para veículos muito pesados' },
+    };
+
+    // Check for restrictions that apply to this vehicle
+    const applicableRestrictions = Object.entries(restrictedRoads)
+      .filter(([_, restriction]) => axles >= restriction.minAxles)
+      .map(([road, restriction]) => ({ road, ...restriction }));
+
+    console.log(`Vehicle has ${axles} axles. Applicable restrictions:`, applicableRestrictions);
+
+    // Call Google Directions API with truck-friendly options
+    // Use alternatives=true to get multiple routes and filter out restricted ones
     let directionsUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&key=${googleApiKey}&language=pt-BR&region=br`;
     
     if (waypoints.length > 0) {
       directionsUrl += `&waypoints=${waypoints.map(w => encodeURIComponent(w)).join('|')}`;
+    }
+
+    // For heavy vehicles, request alternatives and avoid highways restrictions
+    if (axles >= 6) {
+      directionsUrl += '&alternatives=true';
     }
 
     console.log('Calling Google Directions API...');
@@ -103,7 +128,52 @@ serve(async (req) => {
       throw new Error(`Google Directions API error: ${directionsData.status} - ${directionsData.error_message || 'Unknown error'}`);
     }
 
-    const route = directionsData.routes[0];
+    // Filter routes to avoid restricted roads for heavy vehicles
+    let selectedRoute = directionsData.routes[0];
+    let routeWarnings: string[] = [];
+    let avoidedRoutes: string[] = [];
+
+    if (axles >= 6 && directionsData.routes.length > 1) {
+      // Check each route for restricted roads
+      for (const route of directionsData.routes) {
+        const routeSummary = (route.summary || '').toLowerCase();
+        const routeSteps = route.legs.flatMap((leg: any) => 
+          leg.steps.map((step: any) => (step.html_instructions || '').toLowerCase())
+        ).join(' ');
+        const fullRouteText = `${routeSummary} ${routeSteps}`;
+
+        let hasRestriction = false;
+        for (const restriction of applicableRestrictions) {
+          const roadLower = restriction.road.toLowerCase();
+          if (fullRouteText.includes(roadLower)) {
+            hasRestriction = true;
+            avoidedRoutes.push(`${restriction.road}: ${restriction.description}`);
+            console.log(`Route via ${route.summary} contains restricted road: ${restriction.road}`);
+            break;
+          }
+        }
+
+        if (!hasRestriction) {
+          selectedRoute = route;
+          console.log(`Selected alternative route via ${route.summary} (avoids restricted roads)`);
+          break;
+        }
+      }
+
+      // If all routes have restrictions, use the first one but add warnings
+      if (avoidedRoutes.length === directionsData.routes.length) {
+        console.warn('All available routes contain restricted roads for this vehicle');
+        routeWarnings.push(`⚠️ ATENÇÃO: Veículo de ${axles} eixos pode ter restrições nesta rota`);
+        for (const avoided of avoidedRoutes) {
+          routeWarnings.push(`• ${avoided}`);
+        }
+      } else if (avoidedRoutes.length > 0) {
+        routeWarnings.push(`✓ Rota otimizada para veículo de ${axles} eixos`);
+        routeWarnings.push(`Trechos evitados: ${avoidedRoutes.map(r => r.split(':')[0]).join(', ')}`);
+      }
+    }
+
+    const route = selectedRoute;
     const legs = route.legs;
 
     // Calculate total distance and duration
@@ -249,6 +319,11 @@ serve(async (req) => {
       geocodedPoints,
       bounds: route.bounds,
       summary: route.summary,
+      vehicleRestrictions: {
+        axles,
+        warnings: routeWarnings,
+        avoidedRoads: avoidedRoutes.map(r => r.split(':')[0]),
+      },
     };
 
     console.log('Route calculation successful:', {

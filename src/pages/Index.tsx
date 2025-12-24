@@ -85,6 +85,12 @@ interface GeocodedPoint {
   lng: number;
 }
 
+interface VehicleRestrictions {
+  axles: number;
+  warnings: string[];
+  avoidedRoads: string[];
+}
+
 interface SimulationResult {
   totalDistanceKm: number;
   totalDurationHours: number;
@@ -105,6 +111,7 @@ interface SimulationResult {
   geocodedPoints?: GeocodedPoint[];
   originCity?: string;
   destinationCity?: string;
+  vehicleRestrictions?: VehicleRestrictions;
 }
 
 const DEFAULT_VEHICLE: VehicleData = {
@@ -329,6 +336,7 @@ const Index = () => {
         geocodedPoints: routeCalcResult.geocodedPoints,
         originCity,
         destinationCity,
+        vehicleRestrictions: routeCalcResult.vehicleRestrictions,
       };
 
       setResult(simulationResult);
