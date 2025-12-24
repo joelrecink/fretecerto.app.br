@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,6 +36,33 @@ serve(async (req) => {
   }
 
   try {
+    // Validate authentication
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('Missing authorization header');
+      return new Response(JSON.stringify({ success: false, error: 'Missing authorization' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: authHeader } } }
+    );
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+      console.error('Invalid authentication token:', authError?.message);
+      return new Response(JSON.stringify({ success: false, error: 'Invalid authentication token' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
+
+    console.log('Authenticated user:', user.id);
+
     const googleApiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
     const tollGuruApiKey = Deno.env.get('TOLLGURU_API_KEY');
     
@@ -45,7 +73,7 @@ serve(async (req) => {
 
     const { origins, destinations, axles, cargoCapacity } = await req.json() as RouteRequest;
     
-    console.log('Calculating route for:', { origins, destinations, axles, cargoCapacity });
+    console.log('Calculating route for user:', user.id, { origins, destinations, axles, cargoCapacity });
 
     // Build all waypoints in order: origins -> destinations
     const allPoints = [...origins, ...destinations];
