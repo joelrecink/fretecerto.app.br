@@ -17,16 +17,36 @@ const Auth = () => {
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
+  // Check if user is admin and redirect accordingly
+  const checkAdminAndRedirect = async (userId: string) => {
+    try {
+      const { data: roleData, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', userId)
+        .single();
+
+      if (!error && roleData?.role === 'admin') {
+        console.log('Admin user detected, redirecting to admin panel');
+        navigate('/admin', { replace: true });
+        return;
+      }
+    } catch (err) {
+      console.log('Error checking admin role:', err);
+    }
+    navigate('/', { replace: true });
+  };
+
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (session?.user) {
-        navigate('/', { replace: true });
+        checkAdminAndRedirect(session.user.id);
       }
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user) {
-        navigate('/', { replace: true });
+        checkAdminAndRedirect(session.user.id);
       }
     });
 
