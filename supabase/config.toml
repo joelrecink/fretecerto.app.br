@@ -2,3 +2,9 @@ project_id = "mfwqlhmxojxbikfhqeaw"
 
 [functions.calculate-route]
 verify_jwt = false
+
+[functions.create-pix-checkout]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false

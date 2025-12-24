@@ -14,6 +14,114 @@ export type Database = {
   }
   public: {
     Tables: {
+      credit_packages: {
+        Row: {
+          created_at: string
+          credits: number
+          id: string
+          is_active: boolean
+          name: string
+          price_cents: number
+          sort_order: number
+          stripe_price_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          credits: number
+          id?: string
+          is_active?: boolean
+          name: string
+          price_cents: number
+          sort_order?: number
+          stripe_price_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          credits?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          price_cents?: number
+          sort_order?: number
+          stripe_price_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      credit_transactions: {
+        Row: {
+          amount: number
+          created_at: string
+          description: string | null
+          id: string
+          package_name: string | null
+          package_price_cents: number | null
+          status: string
+          stripe_payment_intent_id: string | null
+          stripe_session_id: string | null
+          type: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          package_name?: string | null
+          package_price_cents?: number | null
+          status?: string
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          type: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          package_name?: string | null
+          package_price_cents?: number | null
+          status?: string
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          type?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      pix_config: {
+        Row: {
+          beneficiary_name: string
+          created_at: string
+          id: string
+          is_active: boolean
+          pix_key: string
+          pix_key_type: string
+          updated_at: string
+        }
+        Insert: {
+          beneficiary_name: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          pix_key: string
+          pix_key_type: string
+          updated_at?: string
+        }
+        Update: {
+          beneficiary_name?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          pix_key?: string
+          pix_key_type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -123,6 +231,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      user_credits: {
+        Row: {
+          balance: number
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          balance?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          balance?: number
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
@@ -258,6 +390,20 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_user_credits: {
+        Args: {
+          _amount: number
+          _description?: string
+          _package_name?: string
+          _package_price_cents?: number
+          _stripe_payment_intent_id?: string
+          _stripe_session_id?: string
+          _type?: string
+          _user_id: string
+        }
+        Returns: boolean
+      }
+      get_user_credit_balance: { Args: { _user_id: string }; Returns: number }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -267,6 +413,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      use_user_credits: {
+        Args: { _amount: number; _description?: string; _user_id: string }
         Returns: boolean
       }
     }

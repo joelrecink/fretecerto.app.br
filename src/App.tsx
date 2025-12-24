@@ -10,6 +10,7 @@ import Profile from "./pages/Profile";
 import Vehicles from "./pages/Vehicles";
 import TripHistory from "./pages/TripHistory";
 import Admin from "./pages/Admin";
+import Credits from "./pages/Credits";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/vehicles" element={<Vehicles />} />
             <Route path="/history" element={<TripHistory />} />
             <Route path="/admin" element={<Admin />} />
+            <Route path="/credits" element={<Credits />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>
