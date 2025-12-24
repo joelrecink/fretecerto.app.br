@@ -1,6 +1,6 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import Stripe from 'https://esm.sh/stripe@14.21.0';
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.57.2';
+import Stripe from 'https://esm.sh/stripe@18.5.0';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,11 +17,12 @@ serve(async (req) => {
     const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
     
     if (!stripeKey) {
+      console.error('STRIPE_SECRET_KEY not configured');
       throw new Error('Stripe not configured');
     }
 
     const stripe = new Stripe(stripeKey, {
-      apiVersion: '2023-10-16',
+      apiVersion: '2025-08-27.basil',
     });
 
     const signature = req.headers.get('stripe-signature');
@@ -31,7 +32,9 @@ serve(async (req) => {
 
     if (webhookSecret && signature) {
       try {
-        event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+        // Use async version for Deno compatibility
+        event = await stripe.webhooks.constructEventAsync(body, signature, webhookSecret);
+        console.log('Webhook signature verified successfully');
       } catch (err) {
         console.error('Webhook signature verification failed:', err);
         return new Response(JSON.stringify({ error: 'Invalid signature' }), {
