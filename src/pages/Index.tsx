@@ -79,6 +79,12 @@ interface AIAnalysis {
   summary: string;
 }
 
+interface GeocodedPoint {
+  address: string;
+  lat: number;
+  lng: number;
+}
+
 interface SimulationResult {
   totalDistanceKm: number;
   totalDurationHours: number;
@@ -95,6 +101,10 @@ interface SimulationResult {
   viabilityMessage: string;
   routeSuggestions?: string;
   aiAnalysis?: AIAnalysis;
+  polyline?: string;
+  geocodedPoints?: GeocodedPoint[];
+  originCity?: string;
+  destinationCity?: string;
 }
 
 const DEFAULT_VEHICLE: VehicleData = {
@@ -315,6 +325,10 @@ const Index = () => {
         viabilityMessage: aiAnalysis?.viabilityMessage || (netProfit < 0 ? 'Atenção: Esta rota pode gerar prejuízo.' : 'Viagem com boa margem de lucro.'),
         routeSuggestions: aiAnalysis?.summary || (routeCalcResult.summary ? `Rota via ${routeCalcResult.summary}` : undefined),
         aiAnalysis,
+        polyline: routeCalcResult.polyline,
+        geocodedPoints: routeCalcResult.geocodedPoints,
+        originCity,
+        destinationCity,
       };
 
       setResult(simulationResult);
