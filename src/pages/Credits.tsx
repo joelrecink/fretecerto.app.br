@@ -113,9 +113,9 @@ const Credits = () => {
   };
 
   const handleConfirmPayment = () => {
-    toast.info('Após o pagamento, seus créditos serão adicionados automaticamente em até 5 minutos.');
+    toast.success('Pagamento enviado! Aguarde a confirmação do administrador para liberar seus créditos.', { duration: 5000 });
     setPixModalOpen(false);
-    refreshBalance();
+    setActiveTab('history');
     refreshTransactions();
   };
 
@@ -445,7 +445,15 @@ const Credits = () => {
                   <li>Escolha pagar com PIX</li>
                   <li>Escaneie o QR Code ou cole o código</li>
                   <li>Confirme o pagamento</li>
+                  <li>Clique em "Já Paguei" abaixo</li>
                 </ol>
+              </div>
+
+              {/* Confirmation Notice */}
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm">
+                <p className="text-blue-800">
+                  <strong>📋 Importante:</strong> Após o pagamento, seus créditos serão liberados assim que o administrador confirmar o recebimento (geralmente em até 1 hora em horário comercial).
+                </p>
               </div>
 
               {/* Actions */}
