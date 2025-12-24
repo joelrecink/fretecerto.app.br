@@ -63,6 +63,13 @@ interface RoutePoint {
   weight?: number;
 }
 
+interface RoadRestriction {
+  road: string;
+  reason: string;
+  severity: 'critical' | 'warning' | 'info';
+  alternative?: string;
+}
+
 interface AIAnalysis {
   viabilityScore: 'high' | 'medium' | 'low';
   viabilityMessage: string;
@@ -77,6 +84,7 @@ interface AIAnalysis {
   };
   suggestedFreightValue?: number;
   summary: string;
+  roadRestrictions?: RoadRestriction[];
 }
 
 interface GeocodedPoint {
@@ -287,6 +295,7 @@ const Index = () => {
               netProfit,
               originCity,
               destinationCity,
+              routeSummary: routeCalcResult.summary,
             },
             vehicleData: {
               axles: vehicle.axles,

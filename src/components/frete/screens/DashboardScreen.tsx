@@ -4,6 +4,13 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 
+interface RoadRestriction {
+  road: string;
+  reason: string;
+  severity: 'critical' | 'warning' | 'info';
+  alternative?: string;
+}
+
 interface AIAnalysis {
   viabilityScore: 'high' | 'medium' | 'low';
   viabilityMessage: string;
@@ -18,6 +25,7 @@ interface AIAnalysis {
   };
   suggestedFreightValue?: number;
   summary: string;
+  roadRestrictions?: RoadRestriction[];
 }
 
 interface GeocodedPoint {
@@ -290,6 +298,40 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
             </p>
           </div>
         </div>
+
+        {/* AI Road Restrictions */}
+        {result.aiAnalysis?.roadRestrictions && result.aiAnalysis.roadRestrictions.length > 0 && (
+          <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4">
+            <h3 className="font-bold text-orange-800 mb-3 flex items-center gap-2">
+              <Truck size={18} />
+              Restrições Identificadas pela IA
+            </h3>
+            <ul className="space-y-3">
+              {result.aiAnalysis.roadRestrictions.map((restriction, index) => (
+                <li key={index} className="text-sm">
+                  <div className="flex items-start gap-2">
+                    <span className={`mt-0.5 ${
+                      restriction.severity === 'critical' ? 'text-red-600' : 
+                      restriction.severity === 'warning' ? 'text-amber-600' : 'text-blue-600'
+                    }`}>
+                      {restriction.severity === 'critical' ? '🚫' : 
+                       restriction.severity === 'warning' ? '⚠️' : 'ℹ️'}
+                    </span>
+                    <div>
+                      <p className="font-semibold text-orange-800">{restriction.road}</p>
+                      <p className="text-orange-700">{restriction.reason}</p>
+                      {restriction.alternative && (
+                        <p className="text-orange-600 mt-1 text-xs">
+                          ➡️ Alternativa: {restriction.alternative}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {/* AI Analysis - Alerts */}
         {result.aiAnalysis?.alerts && result.aiAnalysis.alerts.length > 0 && (
