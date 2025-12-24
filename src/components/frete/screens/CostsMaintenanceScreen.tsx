@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wrench, Car, CircleDollarSign, Droplets, Users, Shield, ArrowLeft, ArrowRight, Percent, Check } from 'lucide-react';
+import { Wrench, Car, CircleDollarSign, Droplets, Users, Shield, ArrowLeft, ArrowRight, Check, Cog, Filter } from 'lucide-react';
 
 interface CostsData {
   licensePlate?: string;
@@ -9,20 +9,42 @@ interface CostsData {
   registrationYearly?: number;
   driverSalaryMonthly?: number;
   driverSalaryInclude13th?: boolean;
+  maintenanceCostPerKm?: number;
+  
+  // Tire References
   refTirePriceNew?: number;
   refTireLifespanNew?: number;
   refTirePriceRemold?: number;
   refTireLifespanRemold?: number;
+  
+  // Tire Quantities
   tireSteerQtyNew?: number;
   tireSteerQtyRemold?: number;
   tireDriveQtyNew?: number;
   tireDriveQtyRemold?: number;
   tireTrailerQtyNew?: number;
   tireTrailerQtyRemold?: number;
+  
+  // Engine Oil
   lastOilChangeCost?: number;
   oilChangeIntervalKm?: number;
+  lastOilChangeKm?: number;
+  lastOilChangeDate?: string;
+  lastOilChangeLocation?: string;
+  
+  // Transmission Oil
+  lastTransOilChangeCost?: number;
+  transOilChangeIntervalKm?: number;
+  lastTransOilChangeKm?: number;
+  lastTransOilChangeDate?: string;
+  
+  // Filters
   lastFilterChangeCost?: number;
   filterChangeIntervalKm?: number;
+  lastFilterChangeKm?: number;
+  lastFilterChangeDate?: string;
+  
+  currentOdometer?: number;
 }
 
 interface CostsMaintenanceScreenProps {
@@ -39,6 +61,7 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
   onBack,
 }) => {
   const [tireMode, setTireMode] = useState<'new' | 'remold'>('new');
+  const [oilSection, setOilSection] = useState<'engine' | 'transmission'>('engine');
 
   const handleInputChange = (field: string, value: string) => {
     const numValue = parseFloat(value.replace(',', '.')) || 0;
@@ -61,6 +84,24 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
     return (totalNew * priceNew / lifeNew) + (totalRemold * priceRemold / lifeRemold);
   };
 
+  // Calculate fluid cost per km
+  const calcFluidCostPerKm = () => {
+    let cost = 0;
+    if (data.lastOilChangeCost && data.oilChangeIntervalKm) {
+      cost += data.lastOilChangeCost / data.oilChangeIntervalKm;
+    }
+    if (data.lastTransOilChangeCost && data.transOilChangeIntervalKm) {
+      cost += data.lastTransOilChangeCost / data.transOilChangeIntervalKm;
+    }
+    if (data.lastFilterChangeCost && data.filterChangeIntervalKm) {
+      cost += data.lastFilterChangeCost / data.filterChangeIntervalKm;
+    }
+    return cost;
+  };
+
+  const totalTires = (data.tireSteerQtyNew || 0) + (data.tireDriveQtyNew || 0) + (data.tireTrailerQtyNew || 0) +
+                     (data.tireSteerQtyRemold || 0) + (data.tireDriveQtyRemold || 0) + (data.tireTrailerQtyRemold || 0);
+
   return (
     <div className="min-h-[calc(100vh-64px)] bg-[hsl(var(--background))] pb-32">
       <div className="max-w-2xl mx-auto p-4 space-y-6">
@@ -73,7 +114,7 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
             </div>
             <div>
               <h1 className="text-xl font-bold">Custos & Manutenção</h1>
-              <p className="text-sm text-white/70">Considere custos fixos, pneus e manutenção</p>
+              <p className="text-sm text-white/70">INFORMAÇÕES • 2/6 • ETAPAS</p>
             </div>
           </div>
         </div>
@@ -85,38 +126,47 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
               <Car size={18} />
               <span className="font-medium">Veículo & Resumo</span>
             </div>
-            <span className="text-xs text-blue-600 font-medium">Aba principal</span>
           </div>
 
           <div className="space-y-2">
             <label className="block text-sm font-semibold text-[hsl(var(--foreground))]">
               Placa do Veículo (Obrigatório)
             </label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={data.licensePlate || ''}
-                onChange={(e) => onUpdate('licensePlate', e.target.value.toUpperCase())}
-                placeholder="ABC-1234"
-                className="flex-1 px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              />
-              <button className="px-4 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors">
-                Salvar
-              </button>
-            </div>
+            <input
+              type="text"
+              value={data.licensePlate || ''}
+              onChange={(e) => onUpdate('licensePlate', e.target.value.toUpperCase())}
+              placeholder="ABC-1234"
+              className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all uppercase"
+            />
+          </div>
+
+          {/* Hodômetro */}
+          <div className="space-y-2">
+            <label className="block text-sm font-semibold text-[hsl(var(--foreground))]">
+              Hodômetro Atual (km)
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={data.currentOdometer || ''}
+              onChange={(e) => handleInputChange('currentOdometer', e.target.value)}
+              placeholder="Ex: 450000"
+              className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+            />
           </div>
 
           {/* Cost Summary Cards */}
           <div className="grid grid-cols-2 gap-4 pt-2">
             <div className="bg-[hsl(var(--secondary))] rounded-xl p-4">
-              <p className="text-xs text-[hsl(var(--muted-foreground))] uppercase">Custo de Pneu/km</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] uppercase">Custo Pneu/km</p>
               <p className="text-lg font-bold text-emerald-600">{formatCurrency(calcTireCostPerKm())}</p>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">Novos + Remold + Recape</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">{totalTires} pneus instalados</p>
             </div>
             <div className="bg-[hsl(var(--secondary))] rounded-xl p-4">
-              <p className="text-xs text-[hsl(var(--muted-foreground))] uppercase">Pneus (Instalados)</p>
-              <p className="text-lg font-bold text-blue-600">{formatCurrency(0)}</p>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">Novos + Remold + Recape</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))] uppercase">Custo Fluidos/km</p>
+              <p className="text-lg font-bold text-blue-600">{formatCurrency(calcFluidCostPerKm())}</p>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Óleo + Filtros</p>
             </div>
           </div>
         </div>
@@ -165,6 +215,7 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                         inputMode="decimal"
                         value={data.refTirePriceNew || ''}
                         onChange={(e) => handleInputChange('refTirePriceNew', e.target.value)}
+                        placeholder="3500"
                         className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                       />
                     </div>
@@ -176,30 +227,43 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                       inputMode="decimal"
                       value={data.refTireLifespanNew || ''}
                       onChange={(e) => handleInputChange('refTireLifespanNew', e.target.value)}
+                      placeholder="100000"
                       className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                     />
                   </div>
                 </div>
 
-                {/* Tire positions */}
+                {/* Tire positions - New */}
                 <div className="grid grid-cols-3 gap-3 pt-2">
-                  <div className="border-2 border-dashed border-[hsl(var(--border))] rounded-xl p-3 text-center">
+                  <div className="border-2 border-emerald-200 bg-emerald-50 rounded-xl p-3 text-center">
                     <p className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Eixo Direcional</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))] mb-2">x{data.tireSteerQtyNew || 0} pneus</p>
-                    <p className="font-bold text-sm text-blue-600">R$ 0,00</p>
-                    <button className="mt-2 text-xs text-blue-600 hover:underline">+ Adicionar Pneus</button>
+                    <input
+                      type="number"
+                      value={data.tireSteerQtyNew || 0}
+                      onChange={(e) => onUpdate('tireSteerQtyNew', parseInt(e.target.value) || 0)}
+                      className="w-full text-center py-2 border-2 border-emerald-200 rounded-lg text-lg font-bold"
+                    />
+                    <p className="text-xs text-emerald-600 mt-1">pneus</p>
                   </div>
-                  <div className="border-2 border-dashed border-[hsl(var(--border))] rounded-xl p-3 text-center">
+                  <div className="border-2 border-emerald-200 bg-emerald-50 rounded-xl p-3 text-center">
                     <p className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Eixo Tração</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))] mb-2">x{data.tireDriveQtyNew || 0} pneus</p>
-                    <p className="font-bold text-sm text-blue-600">R$ 0,00</p>
-                    <button className="mt-2 text-xs text-blue-600 hover:underline">+ Adicionar Pneus</button>
+                    <input
+                      type="number"
+                      value={data.tireDriveQtyNew || 0}
+                      onChange={(e) => onUpdate('tireDriveQtyNew', parseInt(e.target.value) || 0)}
+                      className="w-full text-center py-2 border-2 border-emerald-200 rounded-lg text-lg font-bold"
+                    />
+                    <p className="text-xs text-emerald-600 mt-1">pneus</p>
                   </div>
-                  <div className="border-2 border-dashed border-[hsl(var(--border))] rounded-xl p-3 text-center">
-                    <p className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Carreta / Reboque</p>
-                    <p className="text-xs text-[hsl(var(--muted-foreground))] mb-2">x{data.tireTrailerQtyNew || 0} pneus</p>
-                    <p className="font-bold text-sm text-blue-600">R$ 0,00</p>
-                    <button className="mt-2 text-xs text-blue-600 hover:underline">+ Adicionar Pneus</button>
+                  <div className="border-2 border-emerald-200 bg-emerald-50 rounded-xl p-3 text-center">
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Carreta</p>
+                    <input
+                      type="number"
+                      value={data.tireTrailerQtyNew || 0}
+                      onChange={(e) => onUpdate('tireTrailerQtyNew', parseInt(e.target.value) || 0)}
+                      className="w-full text-center py-2 border-2 border-emerald-200 rounded-lg text-lg font-bold"
+                    />
+                    <p className="text-xs text-emerald-600 mt-1">pneus</p>
                   </div>
                 </div>
               </>
@@ -215,6 +279,7 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                         inputMode="decimal"
                         value={data.refTirePriceRemold || ''}
                         onChange={(e) => handleInputChange('refTirePriceRemold', e.target.value)}
+                        placeholder="1800"
                         className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                       />
                     </div>
@@ -226,12 +291,221 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                       inputMode="decimal"
                       value={data.refTireLifespanRemold || ''}
                       onChange={(e) => handleInputChange('refTireLifespanRemold', e.target.value)}
+                      placeholder="60000"
+                      className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                    />
+                  </div>
+                </div>
+
+                {/* Tire positions - Remold */}
+                <div className="grid grid-cols-3 gap-3 pt-2">
+                  <div className="border-2 border-amber-200 bg-amber-50 rounded-xl p-3 text-center">
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Eixo Direcional</p>
+                    <input
+                      type="number"
+                      value={data.tireSteerQtyRemold || 0}
+                      onChange={(e) => onUpdate('tireSteerQtyRemold', parseInt(e.target.value) || 0)}
+                      className="w-full text-center py-2 border-2 border-amber-200 rounded-lg text-lg font-bold"
+                    />
+                    <p className="text-xs text-amber-600 mt-1">pneus</p>
+                  </div>
+                  <div className="border-2 border-amber-200 bg-amber-50 rounded-xl p-3 text-center">
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Eixo Tração</p>
+                    <input
+                      type="number"
+                      value={data.tireDriveQtyRemold || 0}
+                      onChange={(e) => onUpdate('tireDriveQtyRemold', parseInt(e.target.value) || 0)}
+                      className="w-full text-center py-2 border-2 border-amber-200 rounded-lg text-lg font-bold"
+                    />
+                    <p className="text-xs text-amber-600 mt-1">pneus</p>
+                  </div>
+                  <div className="border-2 border-amber-200 bg-amber-50 rounded-xl p-3 text-center">
+                    <p className="text-xs text-[hsl(var(--muted-foreground))] mb-1">Carreta</p>
+                    <input
+                      type="number"
+                      value={data.tireTrailerQtyRemold || 0}
+                      onChange={(e) => onUpdate('tireTrailerQtyRemold', parseInt(e.target.value) || 0)}
+                      className="w-full text-center py-2 border-2 border-amber-200 rounded-lg text-lg font-bold"
+                    />
+                    <p className="text-xs text-amber-600 mt-1">pneus</p>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Lubrificação (Óleo Motor & Transmissão) */}
+        <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] overflow-hidden">
+          <div className="p-4 border-b border-[hsl(var(--border))] flex items-center gap-2">
+            <Droplets size={18} className="text-amber-600" />
+            <span className="font-medium">Lubrificação</span>
+          </div>
+
+          {/* Oil Tabs */}
+          <div className="flex border-b border-[hsl(var(--border))]">
+            <button
+              onClick={() => setOilSection('engine')}
+              className={`flex-1 py-3 text-sm font-medium transition-colors ${
+                oilSection === 'engine'
+                  ? 'text-amber-600 border-b-2 border-amber-600 bg-amber-50'
+                  : 'text-[hsl(var(--muted-foreground))]'
+              }`}
+            >
+              <Cog size={14} className="inline mr-1" /> Óleo Motor
+            </button>
+            <button
+              onClick={() => setOilSection('transmission')}
+              className={`flex-1 py-3 text-sm font-medium transition-colors ${
+                oilSection === 'transmission'
+                  ? 'text-purple-600 border-b-2 border-purple-600 bg-purple-50'
+                  : 'text-[hsl(var(--muted-foreground))]'
+              }`}
+            >
+              <Cog size={14} className="inline mr-1" /> Óleo Câmbio/Diferencial
+            </button>
+          </div>
+
+          <div className="p-4 space-y-4">
+            {oilSection === 'engine' ? (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Intervalo (KM)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={data.oilChangeIntervalKm || ''}
+                      onChange={(e) => handleInputChange('oilChangeIntervalKm', e.target.value)}
+                      placeholder="20000"
+                      className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Custo Troca (R$)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={data.lastOilChangeCost || ''}
+                        onChange={(e) => handleInputChange('lastOilChangeCost', e.target.value)}
+                        placeholder="1500"
+                        className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Última Troca (KM)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={data.lastOilChangeKm || ''}
+                      onChange={(e) => handleInputChange('lastOilChangeKm', e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Data</label>
+                    <input
+                      type="date"
+                      value={data.lastOilChangeDate || ''}
+                      onChange={(e) => onUpdate('lastOilChangeDate', e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Intervalo (KM)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={data.transOilChangeIntervalKm || ''}
+                      onChange={(e) => handleInputChange('transOilChangeIntervalKm', e.target.value)}
+                      placeholder="100000"
+                      className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Custo Troca (R$)</label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={data.lastTransOilChangeCost || ''}
+                        onChange={(e) => handleInputChange('lastTransOilChangeCost', e.target.value)}
+                        placeholder="2500"
+                        className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                      />
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Última Troca (KM)</label>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={data.lastTransOilChangeKm || ''}
+                      onChange={(e) => handleInputChange('lastTransOilChangeKm', e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Data</label>
+                    <input
+                      type="date"
+                      value={data.lastTransOilChangeDate || ''}
+                      onChange={(e) => onUpdate('lastTransOilChangeDate', e.target.value)}
                       className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                     />
                   </div>
                 </div>
               </>
             )}
+          </div>
+        </div>
+
+        {/* Filtros */}
+        <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] p-6 space-y-4">
+          <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+            <Filter size={18} />
+            <span className="font-medium">Kit de Filtros</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Intervalo (KM)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={data.filterChangeIntervalKm || ''}
+                onChange={(e) => handleInputChange('filterChangeIntervalKm', e.target.value)}
+                placeholder="20000"
+                className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Custo do Kit (R$)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={data.lastFilterChangeCost || ''}
+                  onChange={(e) => handleInputChange('lastFilterChangeCost', e.target.value)}
+                  placeholder="800"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                />
+              </div>
+            </div>
           </div>
         </div>
 
@@ -255,6 +529,7 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                   inputMode="decimal"
                   value={data.assetValue || ''}
                   onChange={(e) => handleInputChange('assetValue', e.target.value)}
+                  placeholder="450000"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                 />
               </div>
@@ -267,56 +542,10 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                   inputMode="decimal"
                   value={data.annualDepreciationRate || ''}
                   onChange={(e) => handleInputChange('annualDepreciationRate', e.target.value)}
+                  placeholder="15"
                   className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">%</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Lubrificação & Manutenção */}
-        <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] p-6 space-y-4">
-          <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
-            <Droplets size={18} />
-            <span className="font-medium">Lubrificação & Manutenção</span>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Km de Intervalo</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.oilChangeIntervalKm || ''}
-                onChange={(e) => handleInputChange('oilChangeIntervalKm', e.target.value)}
-                className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Custo de Troca (R$)</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.lastOilChangeCost || ''}
-                  onChange={(e) => handleInputChange('lastOilChangeCost', e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Custo do Kit (R$)</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.lastFilterChangeCost || ''}
-                  onChange={(e) => handleInputChange('lastFilterChangeCost', e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
               </div>
             </div>
           </div>
@@ -329,32 +558,18 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
             <span className="font-medium">Motorista & Salário</span>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Salário Base Mensal (R$)</label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.driverSalaryMonthly || ''}
-                  onChange={(e) => handleInputChange('driverSalaryMonthly', e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Comissão Adicional (%)</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.annualDepreciationRate || ''}
-                  onChange={(e) => handleInputChange('annualDepreciationRate', e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                  placeholder="% do Frete Bruto"
-                />
-              </div>
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Salário Base Mensal (R$)</label>
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={data.driverSalaryMonthly || ''}
+                onChange={(e) => handleInputChange('driverSalaryMonthly', e.target.value)}
+                placeholder="3500"
+                className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+              />
             </div>
           </div>
 
@@ -391,6 +606,7 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                   inputMode="decimal"
                   value={data.insuranceYearly || ''}
                   onChange={(e) => handleInputChange('insuranceYearly', e.target.value)}
+                  placeholder="15000"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                 />
               </div>
@@ -411,6 +627,7 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                   inputMode="decimal"
                   value={data.registrationYearly || ''}
                   onChange={(e) => handleInputChange('registrationYearly', e.target.value)}
+                  placeholder="8000"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                 />
               </div>
