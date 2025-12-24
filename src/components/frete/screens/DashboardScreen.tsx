@@ -92,6 +92,9 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset }) =>
             <p className="text-2xl font-bold text-[hsl(var(--foreground))]">
               {result.totalDurationDays} dia(s)
             </p>
+            <p className="text-sm text-[hsl(var(--muted-foreground))]">
+              {result.totalDurationHours.toFixed(1)} horas de viagem
+            </p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] p-4">

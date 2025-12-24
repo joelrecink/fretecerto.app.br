@@ -54,6 +54,7 @@ const Dashboard: React.FC<DashboardProps> = ({ result, route, vehicle, onReset }
           <div className="bg-white/20 backdrop-blur-sm p-4 rounded-xl">
             <p className="text-sm opacity-80">Duração</p>
             <p className="text-2xl font-bold">{result.totalDurationDays} dias</p>
+            <p className="text-xs opacity-70">{result.totalDurationHours.toFixed(1)}h de viagem</p>
           </div>
           <div className="bg-white/20 backdrop-blur-sm p-4 rounded-xl">
             <p className="text-sm opacity-80">Frete</p>
