@@ -1,25 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Coins, Package, History, CreditCard, CheckCircle, XCircle, Clock, Sparkles, QrCode, Copy, X } from 'lucide-react';
+import { ArrowLeft, Coins, Package, History, CreditCard, CheckCircle, XCircle, Clock, Sparkles } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCredits, CreditPackage, CreditTransaction } from '@/hooks/useCredits';
-import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-
-interface PixPaymentData {
-  pixCode: string;
-  qrCodeUrl: string;
-  transactionId: string;
-  transactionDbId: string;
-  amount: number;
-  credits: number;
-  packageName: string;
-  beneficiaryName: string;
-  expiresAt: string;
-}
 
 const Credits = () => {
   const navigate = useNavigate();
@@ -28,11 +14,6 @@ const Credits = () => {
   const { balance, packages, transactions, loading, purchasePackage, refreshBalance, refreshTransactions } = useCredits();
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'packages' | 'history'>('packages');
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'pix'>('pix');
-  const [pixModalOpen, setPixModalOpen] = useState(false);
-  const [pixData, setPixData] = useState<PixPaymentData | null>(null);
-  const [pixLoading, setPixLoading] = useState(false);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -54,69 +35,15 @@ const Credits = () => {
   }, [searchParams, refreshBalance, refreshTransactions]);
 
   const handlePurchase = async (pkg: CreditPackage) => {
-    if (paymentMethod === 'card') {
-      try {
-        setPurchaseLoading(pkg.id);
-        await purchasePackage(pkg.id);
-      } catch (error) {
-        console.error('Purchase error:', error);
-        toast.error('Erro ao iniciar compra. Tente novamente.');
-      } finally {
-        setPurchaseLoading(null);
-      }
-    } else {
-      // PIX payment
-      await handlePixPayment(pkg);
-    }
-  };
-
-  const handlePixPayment = async (pkg: CreditPackage) => {
     try {
-      setPixLoading(true);
       setPurchaseLoading(pkg.id);
-
-      const { data, error } = await supabase.functions.invoke('create-pix-payment', {
-        body: { packageId: pkg.id },
-      });
-
-      if (error) {
-        throw error;
-      }
-
-      if (!data.success) {
-        throw new Error(data.error || 'Erro ao gerar PIX');
-      }
-
-      setPixData(data);
-      setPixModalOpen(true);
-      toast.success('PIX gerado com sucesso!');
+      await purchasePackage(pkg.id);
     } catch (error) {
-      console.error('PIX error:', error);
-      toast.error('Erro ao gerar PIX. Tente novamente.');
+      console.error('Purchase error:', error);
+      toast.error('Erro ao iniciar compra. Tente novamente.');
     } finally {
-      setPixLoading(false);
       setPurchaseLoading(null);
     }
-  };
-
-  const handleCopyPixCode = async () => {
-    if (!pixData?.pixCode) return;
-    
-    try {
-      await navigator.clipboard.writeText(pixData.pixCode);
-      setCopied(true);
-      toast.success('Código PIX copiado!');
-      setTimeout(() => setCopied(false), 3000);
-    } catch {
-      toast.error('Erro ao copiar código');
-    }
-  };
-
-  const handleConfirmPayment = () => {
-    toast.success('Pagamento enviado! Aguarde a confirmação do administrador para liberar seus créditos.', { duration: 5000 });
-    setPixModalOpen(false);
-    setActiveTab('history');
-    refreshTransactions();
   };
 
   const formatCurrency = (cents: number) => {
@@ -139,7 +66,7 @@ const Credits = () => {
         return (
           <span className="flex items-center gap-1 text-xs font-medium text-amber-600 bg-amber-100 px-2 py-1 rounded-full">
             <Clock size={12} />
-            Pendente
+            Processando
           </span>
         );
       case 'failed':
@@ -238,42 +165,20 @@ const Credits = () => {
             <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-6 mb-6">
               <h2 className="text-lg font-semibold text-amber-800 mb-2">Como funcionam os créditos?</h2>
               <p className="text-amber-700">
-                Cada cálculo de rota consome 1 crédito. Compre pacotes de créditos e economize!
+                Cada análise de rota com IA consome 1 crédito. Compre pacotes de créditos e economize!
               </p>
             </div>
 
-            {/* Payment Method Selector */}
+            {/* Payment Info */}
             <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] p-4 mb-6">
-              <h3 className="font-semibold text-[hsl(var(--foreground))] mb-3">Forma de Pagamento</h3>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setPaymentMethod('pix')}
-                  className={`flex-1 flex items-center justify-center gap-3 p-4 rounded-xl border-2 transition-all ${
-                    paymentMethod === 'pix'
-                      ? 'border-emerald-500 bg-emerald-50 text-emerald-700'
-                      : 'border-[hsl(var(--border))] hover:border-emerald-300'
-                  }`}
-                >
-                  <QrCode size={24} />
-                  <div className="text-left">
-                    <p className="font-semibold">PIX</p>
-                    <p className="text-xs opacity-70">Aprovação instantânea</p>
-                  </div>
-                </button>
-                <button
-                  onClick={() => setPaymentMethod('card')}
-                  className={`flex-1 flex items-center justify-center gap-3 p-4 rounded-xl border-2 transition-all ${
-                    paymentMethod === 'card'
-                      ? 'border-blue-500 bg-blue-50 text-blue-700'
-                      : 'border-[hsl(var(--border))] hover:border-blue-300'
-                  }`}
-                >
-                  <CreditCard size={24} />
-                  <div className="text-left">
-                    <p className="font-semibold">Cartão</p>
-                    <p className="text-xs opacity-70">Crédito em até 12x</p>
-                  </div>
-                </button>
+              <div className="flex items-center gap-3 text-emerald-700">
+                <CheckCircle size={24} />
+                <div>
+                  <h3 className="font-semibold">Pagamento Seguro via Stripe</h3>
+                  <p className="text-sm text-[hsl(var(--muted-foreground))]">
+                    Cartão de crédito em até 12x • Créditos liberados instantaneamente após pagamento
+                  </p>
+                </div>
               </div>
             </div>
 
@@ -306,19 +211,17 @@ const Credits = () => {
                       onClick={() => handlePurchase(pkg)}
                       disabled={purchaseLoading !== null}
                       className={`w-full py-3 rounded-xl font-semibold transition-colors flex items-center justify-center gap-2 ${
-                        paymentMethod === 'pix'
-                          ? 'bg-emerald-500 hover:bg-emerald-600 text-white'
-                          : index === 1
-                            ? 'bg-amber-500 hover:bg-amber-600 text-white'
-                            : 'bg-[hsl(var(--secondary))] hover:bg-[hsl(var(--secondary))]/80 text-[hsl(var(--foreground))]'
+                        index === 1
+                          ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                          : 'bg-[hsl(var(--secondary))] hover:bg-[hsl(var(--secondary))]/80 text-[hsl(var(--foreground))]'
                       } disabled:opacity-50`}
                     >
                       {purchaseLoading === pkg.id ? (
                         <div className="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
                       ) : (
                         <>
-                          {paymentMethod === 'pix' ? <QrCode size={18} /> : <CreditCard size={18} />}
-                          {paymentMethod === 'pix' ? 'Pagar com PIX' : 'Comprar'}
+                          <CreditCard size={18} />
+                          Comprar
                         </>
                       )}
                     </button>
@@ -328,7 +231,7 @@ const Credits = () => {
             </div>
 
             <div className="mt-6 text-center text-sm text-[hsl(var(--muted-foreground))]">
-              <p>Pagamento seguro • PIX com confirmação instantânea</p>
+              <p>🔒 Pagamento seguro processado pelo Stripe • Créditos liberados automaticamente</p>
             </div>
           </div>
         )}
@@ -377,108 +280,6 @@ const Credits = () => {
           </div>
         )}
       </main>
-
-      {/* PIX Modal */}
-      <Dialog open={pixModalOpen} onOpenChange={setPixModalOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-emerald-700">
-              <QrCode size={24} />
-              Pagamento via PIX
-            </DialogTitle>
-          </DialogHeader>
-
-          {pixData && (
-            <div className="space-y-6">
-              {/* QR Code */}
-              <div className="flex justify-center">
-                <div className="bg-white p-4 rounded-2xl border-2 border-emerald-200 shadow-lg">
-                  <img 
-                    src={pixData.qrCodeUrl} 
-                    alt="QR Code PIX" 
-                    className="w-64 h-64"
-                  />
-                </div>
-              </div>
-
-              {/* Info */}
-              <div className="text-center space-y-2">
-                <p className="text-2xl font-bold text-emerald-600">
-                  R$ {pixData.amount.toFixed(2).replace('.', ',')}
-                </p>
-                <p className="text-[hsl(var(--muted-foreground))]">
-                  {pixData.credits} créditos • {pixData.packageName}
-                </p>
-                <p className="text-sm text-[hsl(var(--muted-foreground))]">
-                  Beneficiário: {pixData.beneficiaryName}
-                </p>
-              </div>
-
-              {/* Copy Code */}
-              <div className="space-y-2">
-                <p className="text-sm font-medium text-center">PIX Copia e Cola</p>
-                <div className="relative">
-                  <input
-                    type="text"
-                    readOnly
-                    value={pixData.pixCode}
-                    className="w-full p-3 pr-12 bg-[hsl(var(--secondary))] rounded-xl text-xs font-mono overflow-hidden text-ellipsis"
-                  />
-                  <button
-                    onClick={handleCopyPixCode}
-                    className={`absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-lg transition-colors ${
-                      copied 
-                        ? 'bg-emerald-100 text-emerald-600' 
-                        : 'bg-white hover:bg-emerald-50 text-[hsl(var(--muted-foreground))]'
-                    }`}
-                  >
-                    {copied ? <CheckCircle size={20} /> : <Copy size={20} />}
-                  </button>
-                </div>
-              </div>
-
-              {/* Instructions */}
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm">
-                <p className="font-semibold text-amber-800 mb-2">Como pagar:</p>
-                <ol className="text-amber-700 space-y-1 list-decimal list-inside">
-                  <li>Abra o app do seu banco</li>
-                  <li>Escolha pagar com PIX</li>
-                  <li>Escaneie o QR Code ou cole o código</li>
-                  <li>Confirme o pagamento</li>
-                  <li>Clique em "Já Paguei" abaixo</li>
-                </ol>
-              </div>
-
-              {/* Confirmation Notice */}
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm">
-                <p className="text-blue-800">
-                  <strong>📋 Importante:</strong> Após o pagamento, seus créditos serão liberados assim que o administrador confirmar o recebimento (geralmente em até 1 hora em horário comercial).
-                </p>
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setPixModalOpen(false)}
-                  className="flex-1 py-3 rounded-xl border border-[hsl(var(--border))] font-medium hover:bg-[hsl(var(--secondary))] transition-colors"
-                >
-                  Fechar
-                </button>
-                <button
-                  onClick={handleConfirmPayment}
-                  className="flex-1 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition-colors"
-                >
-                  Já Paguei
-                </button>
-              </div>
-
-              <p className="text-xs text-center text-[hsl(var(--muted-foreground))]">
-                Válido por 30 minutos • ID: {pixData.transactionId}
-              </p>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };
