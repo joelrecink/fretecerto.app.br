@@ -6,6 +6,7 @@ interface RoutePoint {
   address: string;
   value: number;
   weight?: number;
+  valuePerTon?: number;
 }
 
 interface PickupScreenProps {
@@ -30,9 +31,30 @@ const PickupScreen: React.FC<PickupScreenProps> = ({
   const totalWeight = pickups.reduce((acc, p) => acc + (p.weight || 0), 0);
   const isOverweight = totalWeight > cargoCapacity;
 
-  const handleNumericChange = (id: string, field: string, value: string) => {
+  const handleNumericChange = (id: string, field: string, value: string, pickup: RoutePoint) => {
     const numValue = parseFloat(value.replace(',', '.')) || 0;
-    onUpdatePickup(id, field, numValue);
+    
+    if (field === 'weight') {
+      // When weight changes, recalculate total value if valuePerTon exists
+      onUpdatePickup(id, 'weight', numValue);
+      if (pickup.valuePerTon && numValue > 0) {
+        onUpdatePickup(id, 'value', numValue * pickup.valuePerTon);
+      }
+    } else if (field === 'valuePerTon') {
+      // When valuePerTon changes, recalculate total value
+      onUpdatePickup(id, 'valuePerTon', numValue);
+      if (pickup.weight && numValue > 0) {
+        onUpdatePickup(id, 'value', pickup.weight * numValue);
+      }
+    } else if (field === 'value') {
+      // When value changes directly, calculate valuePerTon if weight exists
+      onUpdatePickup(id, 'value', numValue);
+      if (pickup.weight && pickup.weight > 0) {
+        onUpdatePickup(id, 'valuePerTon', numValue / pickup.weight);
+      }
+    } else {
+      onUpdatePickup(id, field, numValue);
+    }
   };
 
   const formatCurrency = (val: number) => {
@@ -97,19 +119,24 @@ const PickupScreen: React.FC<PickupScreenProps> = ({
                     type="text"
                     inputMode="decimal"
                     value={pickup.weight || ''}
-                    onChange={(e) => handleNumericChange(pickup.id, 'weight', e.target.value)}
+                    onChange={(e) => handleNumericChange(pickup.id, 'weight', e.target.value, pickup)}
                     className="w-full pl-12 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
                   />
                 </div>
               </div>
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Valor por Ton</label>
-                <input
-                  type="text"
-                  placeholder="Valor unitário"
-                  className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white text-[hsl(var(--muted-foreground))]"
-                  disabled
-                />
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={pickup.valuePerTon || ''}
+                    onChange={(e) => handleNumericChange(pickup.id, 'valuePerTon', e.target.value, pickup)}
+                    placeholder="0,00"
+                    className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  />
+                </div>
               </div>
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Valor Total</label>
@@ -119,7 +146,7 @@ const PickupScreen: React.FC<PickupScreenProps> = ({
                     type="text"
                     inputMode="decimal"
                     value={pickup.value || ''}
-                    onChange={(e) => handleNumericChange(pickup.id, 'value', e.target.value)}
+                    onChange={(e) => handleNumericChange(pickup.id, 'value', e.target.value, pickup)}
                     className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
                   />
                 </div>

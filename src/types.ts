@@ -161,6 +161,7 @@ export interface RoutePoint {
   address: string;
   value: number; // Freight value (Income) or specific cost
   weight?: number; // Weight in tons for this specific point
+  valuePerTon?: number; // Value per ton (optional, for calculation)
 }
 
 export interface RouteData {
