@@ -49,6 +49,7 @@ interface SimulationResult {
   driverCommissionCost: number;
   estimatedMaintenanceCost: number;
   estimatedFixedCost?: number;
+  estimatedArdaCost?: number;
   returnCost?: number;
   totalFreightIncome: number;
   netProfit: number;
@@ -61,6 +62,36 @@ interface SimulationResult {
   originCity?: string;
   destinationCity?: string;
   vehicleRestrictions?: VehicleRestrictions;
+  routingEngine?: 'tomtom' | 'google';
+  costBreakdown?: {
+    dailyCosts: {
+      insurance: number;
+      registration: number;
+      depreciation: number;
+      salary: number;
+      parking: number;
+      tracking: number;
+      accounting: number;
+      otherFixed: number;
+      total: number;
+    };
+    perKmCosts: {
+      fuel: number;
+      tires: number;
+      oil: number;
+      transOil: number;
+      filters: number;
+      grease: number;
+      washing: number;
+      otherMaintenance: number;
+      total: number;
+    };
+    tripCosts: {
+      tolls: number;
+      commission: number;
+      arda: number;
+    };
+  };
 }
 
 interface DashboardScreenProps {
@@ -457,13 +488,19 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
               <span className="font-medium">{formatCurrency(result.driverCommissionCost)}</span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-[hsl(var(--border))]">
-              <span className="text-[hsl(var(--muted-foreground))]">Manutenção</span>
+              <span className="text-[hsl(var(--muted-foreground))]">Manutenção (por km)</span>
               <span className="font-medium">{formatCurrency(result.estimatedMaintenanceCost)}</span>
             </div>
             <div className="flex justify-between items-center py-2 border-b border-[hsl(var(--border))]">
-              <span className="text-[hsl(var(--muted-foreground))]">Custos Fixos</span>
+              <span className="text-[hsl(var(--muted-foreground))]">Custos Fixos (por dia)</span>
               <span className="font-medium">{formatCurrency(result.estimatedFixedCost || 0)}</span>
             </div>
+            {result.estimatedArdaCost && result.estimatedArdaCost > 0 && (
+              <div className="flex justify-between items-center py-2 border-b border-[hsl(var(--border))]">
+                <span className="text-[hsl(var(--muted-foreground))]">ARDA (Lei 13.103)</span>
+                <span className="font-medium text-purple-600">{formatCurrency(result.estimatedArdaCost)}</span>
+              </div>
+            )}
             {result.returnCost && (
               <div className="flex justify-between items-center py-2 border-b border-[hsl(var(--border))]">
                 <span className="text-[hsl(var(--muted-foreground))]">Retorno Vazio</span>
@@ -472,6 +509,122 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
             )}
           </div>
         </div>
+
+        {/* Detailed Cost Breakdown - Daily Costs */}
+        {result.costBreakdown && (
+          <>
+            <div className="bg-blue-50 rounded-2xl border border-blue-200 p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-blue-800">📅 Custos por DIA (Anexados na Placa)</h3>
+                <span className="text-lg font-bold text-blue-700">{formatCurrency(result.costBreakdown.dailyCosts.total)}/dia</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {result.costBreakdown.dailyCosts.insurance > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-blue-600">Seguro</span>
+                    <span className="font-medium">{formatCurrency(result.costBreakdown.dailyCosts.insurance)}</span>
+                  </div>
+                )}
+                {result.costBreakdown.dailyCosts.registration > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-blue-600">IPVA/Licenc.</span>
+                    <span className="font-medium">{formatCurrency(result.costBreakdown.dailyCosts.registration)}</span>
+                  </div>
+                )}
+                {result.costBreakdown.dailyCosts.depreciation > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-blue-600">Depreciação</span>
+                    <span className="font-medium">{formatCurrency(result.costBreakdown.dailyCosts.depreciation)}</span>
+                  </div>
+                )}
+                {result.costBreakdown.dailyCosts.salary > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-blue-600">Salário</span>
+                    <span className="font-medium">{formatCurrency(result.costBreakdown.dailyCosts.salary)}</span>
+                  </div>
+                )}
+                {result.costBreakdown.dailyCosts.parking > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-blue-600">Estacionam.</span>
+                    <span className="font-medium">{formatCurrency(result.costBreakdown.dailyCosts.parking)}</span>
+                  </div>
+                )}
+                {result.costBreakdown.dailyCosts.tracking > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-blue-600">Rastreador</span>
+                    <span className="font-medium">{formatCurrency(result.costBreakdown.dailyCosts.tracking)}</span>
+                  </div>
+                )}
+              </div>
+              <div className="pt-2 border-t border-blue-200">
+                <p className="text-xs text-blue-600">
+                  Total para {result.totalDurationDays} dia(s): <span className="font-bold">{formatCurrency(result.costBreakdown.dailyCosts.total * result.totalDurationDays)}</span>
+                </p>
+              </div>
+            </div>
+
+            {/* Per KM Costs */}
+            <div className="bg-orange-50 rounded-2xl border border-orange-200 p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-bold text-orange-800">🛣️ Custos por KM (Resumo da Viagem)</h3>
+                <span className="text-lg font-bold text-orange-700">{formatCurrency(result.costBreakdown.perKmCosts.total)}/km</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                {result.costBreakdown.perKmCosts.fuel > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-orange-600">Combustível</span>
+                    <span className="font-medium">{formatCurrency(result.costBreakdown.perKmCosts.fuel)}</span>
+                  </div>
+                )}
+                {result.costBreakdown.perKmCosts.tires > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-orange-600">Pneus</span>
+                    <span className="font-medium">{formatCurrency(result.costBreakdown.perKmCosts.tires)}</span>
+                  </div>
+                )}
+                {result.costBreakdown.perKmCosts.oil > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-orange-600">Óleo Motor</span>
+                    <span className="font-medium">{formatCurrency(result.costBreakdown.perKmCosts.oil)}</span>
+                  </div>
+                )}
+                {result.costBreakdown.perKmCosts.filters > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-orange-600">Filtros</span>
+                    <span className="font-medium">{formatCurrency(result.costBreakdown.perKmCosts.filters)}</span>
+                  </div>
+                )}
+                {result.costBreakdown.perKmCosts.grease > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-orange-600">Graxa</span>
+                    <span className="font-medium">{formatCurrency(result.costBreakdown.perKmCosts.grease)}</span>
+                  </div>
+                )}
+                {result.costBreakdown.perKmCosts.washing > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-orange-600">Lavagem</span>
+                    <span className="font-medium">{formatCurrency(result.costBreakdown.perKmCosts.washing)}</span>
+                  </div>
+                )}
+              </div>
+              <div className="pt-2 border-t border-orange-200">
+                <p className="text-xs text-orange-600">
+                  Total para {result.totalDistanceKm.toLocaleString('pt-BR')} km: <span className="font-bold">{formatCurrency(result.costBreakdown.perKmCosts.total * result.totalDistanceKm)}</span>
+                </p>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Routing Engine Info */}
+        {result.routingEngine && (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+            <p className="text-sm text-emerald-700">
+              🛰️ Rota calculada via <span className="font-bold">{result.routingEngine === 'tomtom' ? 'TomTom Truck Routing' : 'Google Maps'}</span>
+              {result.routingEngine === 'tomtom' && ' (otimizada para caminhões)'}
+            </p>
+          </div>
+        )}
 
         {/* Suggestions */}
         {result.routeSuggestions && (

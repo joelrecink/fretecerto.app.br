@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Wrench, Car, Droplets, Shield, ArrowLeft, ArrowRight, Check, Cog, Save, ChevronDown, Loader2, Filter, CircleDollarSign, Users } from 'lucide-react';
+import { Wrench, Car, Droplets, Shield, ArrowLeft, ArrowRight, Check, Cog, Save, ChevronDown, Loader2, Filter, CircleDollarSign, Users, Plus, Truck, Calculator, Scale } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import type { SavedVehicle } from '@/hooks/useVehicles';
@@ -14,6 +14,27 @@ interface CostsData {
   driverSalaryMonthly?: number;
   driverSalaryInclude13th?: boolean;
   maintenanceCostPerKm?: number;
+  
+  // Custos Fixos Adicionais (mensais)
+  parkingMonthly?: number;
+  trackingMonthly?: number;
+  accountingMonthly?: number;
+  otherFixedMonthly?: number;
+  
+  // Custos Variáveis Adicionais (por km)
+  otherMaintenanceCostPerKm?: number;
+  greaseCostPerKm?: number;
+  washingCostPerKm?: number;
+  
+  // ARDA - Lei 13.103/2015
+  ardaEnabled?: boolean;
+  ardaPercentage?: number;
+  
+  // Dimensões do veículo (TomTom)
+  vehicleWeight?: number;
+  vehicleHeight?: number;
+  vehicleWidth?: number;
+  vehicleLength?: number;
   
   // Tire References
   refTirePriceNew?: number;
@@ -49,6 +70,7 @@ interface CostsData {
   lastFilterChangeDate?: string;
   
   currentOdometer?: number;
+  axles?: number;
 }
 
 interface CostsMaintenanceScreenProps {
@@ -169,7 +191,7 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
           </div>
 
           {/* Vehicle Selector - Show only if user is logged in */}
-          {user && vehicles.length > 0 && (
+          {user && (
             <div className="relative">
               <button
                 onClick={() => setVehicleDropdownOpen(!vehicleDropdownOpen)}
@@ -178,7 +200,7 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                 <div className="flex items-center gap-2">
                   <Car size={18} className="text-emerald-600" />
                   <span className="font-medium text-[hsl(var(--foreground))]">
-                    {data.licensePlate || 'Selecionar veículo salvo'}
+                    {data.licensePlate || 'Selecionar ou criar veículo'}
                   </span>
                 </div>
                 <ChevronDown size={18} className={`text-[hsl(var(--muted-foreground))] transition-transform ${vehicleDropdownOpen ? 'rotate-180' : ''}`} />
@@ -188,30 +210,54 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setVehicleDropdownOpen(false)} />
                   <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl border border-[hsl(var(--border))] shadow-lg z-50 max-h-64 overflow-auto">
-                    {vehicles.map((v) => (
-                      <button
-                        key={v.id}
-                        onClick={() => handleSelectVehicle(v)}
-                        className={`w-full flex items-center justify-between px-4 py-3 hover:bg-[hsl(var(--secondary))] transition-colors ${
-                          v.license_plate === data.licensePlate ? 'bg-blue-50' : ''
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
-                            <Car size={16} className="text-blue-600" />
+                    {/* Opção para criar novo veículo */}
+                    <button
+                      onClick={() => {
+                        onUpdate('licensePlate', '');
+                        setVehicleDropdownOpen(false);
+                        toast.info('Digite a placa do novo veículo abaixo');
+                      }}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-emerald-50 transition-colors border-b border-[hsl(var(--border))]"
+                    >
+                      <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center">
+                        <Plus size={16} className="text-emerald-600" />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-semibold text-emerald-700">+ Criar novo veículo</p>
+                        <p className="text-xs text-[hsl(var(--muted-foreground))]">Cadastrar nova placa</p>
+                      </div>
+                    </button>
+                    
+                    {vehicles.length === 0 ? (
+                      <div className="p-4 text-center text-[hsl(var(--muted-foreground))] text-sm">
+                        Nenhum veículo salvo ainda
+                      </div>
+                    ) : (
+                      vehicles.map((v) => (
+                        <button
+                          key={v.id}
+                          onClick={() => handleSelectVehicle(v)}
+                          className={`w-full flex items-center justify-between px-4 py-3 hover:bg-[hsl(var(--secondary))] transition-colors ${
+                            v.license_plate === data.licensePlate ? 'bg-blue-50' : ''
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+                              <Car size={16} className="text-blue-600" />
+                            </div>
+                            <div className="text-left">
+                              <p className="font-semibold text-[hsl(var(--foreground))]">{v.license_plate}</p>
+                              {v.model_name && (
+                                <p className="text-xs text-[hsl(var(--muted-foreground))]">{v.model_name}</p>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-left">
-                            <p className="font-semibold text-[hsl(var(--foreground))]">{v.license_plate}</p>
-                            {v.model_name && (
-                              <p className="text-xs text-[hsl(var(--muted-foreground))]">{v.model_name}</p>
-                            )}
-                          </div>
-                        </div>
-                        {v.license_plate === data.licensePlate && (
-                          <Check size={18} className="text-emerald-600" />
-                        )}
-                      </button>
-                    ))}
+                          {v.license_plate === data.licensePlate && (
+                            <Check size={18} className="text-emerald-600" />
+                          )}
+                        </button>
+                      ))
+                    )}
                   </div>
                 </>
               )}
@@ -716,6 +762,9 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                 />
               </div>
+              <p className="text-xs text-blue-600 font-medium">
+                = R$ {((data.insuranceYearly || 0) / 365).toFixed(2)}/dia
+              </p>
             </div>
           </div>
 
@@ -737,7 +786,274 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                 />
               </div>
+              <p className="text-xs text-blue-600 font-medium">
+                = R$ {((data.registrationYearly || 0) / 365).toFixed(2)}/dia
+              </p>
             </div>
+          </div>
+        </div>
+
+        {/* Custos Fixos Adicionais */}
+        <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+              <Calculator size={18} />
+              <span className="font-medium">Outros Custos Fixos Mensais</span>
+            </div>
+            <span className="px-2 py-1 bg-blue-100 text-blue-600 text-xs font-medium rounded-full">Custo/Dia</span>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Estacionamento (R$/mês)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={data.parkingMonthly || ''}
+                  onChange={(e) => handleInputChange('parkingMonthly', e.target.value)}
+                  placeholder="500"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Rastreador (R$/mês)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={data.trackingMonthly || ''}
+                  onChange={(e) => handleInputChange('trackingMonthly', e.target.value)}
+                  placeholder="150"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Contador (R$/mês)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={data.accountingMonthly || ''}
+                  onChange={(e) => handleInputChange('accountingMonthly', e.target.value)}
+                  placeholder="300"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Outros Fixos (R$/mês)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={data.otherFixedMonthly || ''}
+                  onChange={(e) => handleInputChange('otherFixedMonthly', e.target.value)}
+                  placeholder="0"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                />
+              </div>
+            </div>
+          </div>
+          
+          {/* Resumo custo fixo diário */}
+          <div className="bg-blue-50 p-4 rounded-xl border border-blue-100">
+            <p className="text-xs text-blue-600 uppercase font-bold mb-1">Total Custos Fixos/Dia</p>
+            <p className="text-2xl font-bold text-blue-700">
+              R$ {(
+                ((data.insuranceYearly || 0) + (data.registrationYearly || 0)) / 365 +
+                ((data.driverSalaryMonthly || 0) * (data.driverSalaryInclude13th ? 13.33 : 12)) / 365 +
+                ((data.assetValue || 0) * ((data.annualDepreciationRate || 0) / 100)) / 365 +
+                ((data.parkingMonthly || 0) + (data.trackingMonthly || 0) + (data.accountingMonthly || 0) + (data.otherFixedMonthly || 0)) / 30
+              ).toFixed(2)}
+            </p>
+          </div>
+        </div>
+
+        {/* ARDA - Adicional de Remuneração de Descanso Assegurado */}
+        <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+              <Scale size={18} />
+              <span className="font-medium">ARDA - Lei 13.103/2015</span>
+            </div>
+            <span className="px-2 py-1 bg-purple-100 text-purple-600 text-xs font-medium rounded-full">Legislação BR</span>
+          </div>
+
+          <div className="bg-purple-50 p-3 rounded-xl text-sm text-purple-700">
+            <p>O ARDA (Adicional de Remuneração de Descanso Assegurado) é calculado sobre o tempo de espera do motorista durante carga/descarga.</p>
+          </div>
+
+          <button
+            onClick={() => onUpdate('ardaEnabled', !data.ardaEnabled)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg border-2 transition-colors ${
+              data.ardaEnabled
+                ? 'border-purple-500 bg-purple-50 text-purple-700'
+                : 'border-[hsl(var(--border))] text-[hsl(var(--muted-foreground))]'
+            }`}
+          >
+            <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${
+              data.ardaEnabled ? 'border-purple-500 bg-purple-500' : 'border-[hsl(var(--border))]'
+            }`}>
+              {data.ardaEnabled && <Check size={14} className="text-white" />}
+            </div>
+            <span className="text-sm">Incluir cálculo de ARDA</span>
+          </button>
+
+          {data.ardaEnabled && (
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Percentual ARDA (%)</label>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={data.ardaPercentage || 30}
+                  onChange={(e) => handleInputChange('ardaPercentage', e.target.value)}
+                  placeholder="30"
+                  className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">%</span>
+              </div>
+              <p className="text-xs text-[hsl(var(--muted-foreground))]">Padrão: 30% sobre horas extras de espera</p>
+            </div>
+          )}
+        </div>
+
+        {/* Dimensões do Veículo (TomTom) */}
+        <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+              <Truck size={18} />
+              <span className="font-medium">Dimensões do Veículo</span>
+            </div>
+            <span className="px-2 py-1 bg-emerald-100 text-emerald-600 text-xs font-medium rounded-full">TomTom Routing</span>
+          </div>
+
+          <div className="bg-emerald-50 p-3 rounded-xl text-sm text-emerald-700">
+            <p>Usado para roteirização otimizada para caminhões, evitando vias com restrições de peso, altura ou largura.</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Peso Total (kg)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={data.vehicleWeight || ''}
+                onChange={(e) => handleInputChange('vehicleWeight', e.target.value)}
+                placeholder={`${7500 + ((data.axles || 6) - 2) * 8000}`}
+                className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Altura (m)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={data.vehicleHeight || ''}
+                onChange={(e) => handleInputChange('vehicleHeight', e.target.value)}
+                placeholder="4.0"
+                className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Largura (m)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={data.vehicleWidth || ''}
+                onChange={(e) => handleInputChange('vehicleWidth', e.target.value)}
+                placeholder="2.55"
+                className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Comprimento (m)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={data.vehicleLength || ''}
+                onChange={(e) => handleInputChange('vehicleLength', e.target.value)}
+                placeholder={`${(data.axles || 6) <= 4 ? '14' : (data.axles || 6) <= 6 ? '18.15' : '19.8'}`}
+                className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Outros Custos por KM */}
+        <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-[hsl(var(--muted-foreground))]">
+              <Wrench size={18} />
+              <span className="font-medium">Outras Manutenções</span>
+            </div>
+            <span className="px-2 py-1 bg-orange-100 text-orange-600 text-xs font-medium rounded-full">Custo/KM</span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Graxa (R$/km)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={data.greaseCostPerKm || ''}
+                  onChange={(e) => handleInputChange('greaseCostPerKm', e.target.value)}
+                  placeholder="0.01"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Lavagem (R$/km)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={data.washingCostPerKm || ''}
+                  onChange={(e) => handleInputChange('washingCostPerKm', e.target.value)}
+                  placeholder="0.02"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Outros (R$/km)</label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={data.otherMaintenanceCostPerKm || ''}
+                  onChange={(e) => handleInputChange('otherMaintenanceCostPerKm', e.target.value)}
+                  placeholder="0.05"
+                  className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Resumo custo por km */}
+          <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
+            <p className="text-xs text-orange-600 uppercase font-bold mb-1">Total Custos Variáveis/KM</p>
+            <p className="text-2xl font-bold text-orange-700">
+              R$ {(
+                calcTireCostPerKm() + 
+                calcFluidCostPerKm() +
+                (data.greaseCostPerKm || 0) +
+                (data.washingCostPerKm || 0) +
+                (data.otherMaintenanceCostPerKm || 0)
+              ).toFixed(4)}
+            </p>
           </div>
         </div>
       </div>
