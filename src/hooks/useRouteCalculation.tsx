@@ -35,6 +35,7 @@ interface RouteCalculationResult {
     warnings: string[];
     avoidedRoads: string[];
   };
+  routingEngine?: 'tomtom' | 'google';
 }
 
 interface UseRouteCalculationReturn {
@@ -108,6 +109,7 @@ export const useRouteCalculation = (): UseRouteCalculationReturn => {
         bounds: data.bounds,
         summary: data.summary,
         vehicleRestrictions: data.vehicleRestrictions,
+        routingEngine: data.routingEngine,
       };
 
       setResult(calculationResult);

@@ -51,9 +51,29 @@ interface VehicleData {
   // Engine Oil
   lastOilChangeCost?: number;
   oilChangeIntervalKm?: number;
+  // Transmission Oil
+  lastTransOilChangeCost?: number;
+  transOilChangeIntervalKm?: number;
   // Filters
   lastFilterChangeCost?: number;
   filterChangeIntervalKm?: number;
+  // Custos fixos adicionais (mensais)
+  parkingMonthly?: number;
+  trackingMonthly?: number;
+  accountingMonthly?: number;
+  otherFixedMonthly?: number;
+  // Custos variáveis adicionais (por km)
+  otherMaintenanceCostPerKm?: number;
+  greaseCostPerKm?: number;
+  washingCostPerKm?: number;
+  // ARDA
+  ardaEnabled?: boolean;
+  ardaPercentage?: number;
+  // Dimensões do veículo (TomTom)
+  vehicleWeight?: number;
+  vehicleHeight?: number;
+  vehicleWidth?: number;
+  vehicleLength?: number;
 }
 
 interface RoutePoint {
@@ -108,6 +128,7 @@ interface SimulationResult {
   driverCommissionCost: number;
   estimatedMaintenanceCost: number;
   estimatedFixedCost?: number;
+  estimatedArdaCost?: number;
   returnCost?: number;
   totalFreightIncome: number;
   netProfit: number;
@@ -120,6 +141,36 @@ interface SimulationResult {
   originCity?: string;
   destinationCity?: string;
   vehicleRestrictions?: VehicleRestrictions;
+  routingEngine?: 'tomtom' | 'google';
+  costBreakdown?: {
+    dailyCosts: {
+      insurance: number;
+      registration: number;
+      depreciation: number;
+      salary: number;
+      parking: number;
+      tracking: number;
+      accounting: number;
+      otherFixed: number;
+      total: number;
+    };
+    perKmCosts: {
+      fuel: number;
+      tires: number;
+      oil: number;
+      transOil: number;
+      filters: number;
+      grease: number;
+      washing: number;
+      otherMaintenance: number;
+      total: number;
+    };
+    tripCosts: {
+      tolls: number;
+      commission: number;
+      arda: number;
+    };
+  };
 }
 
 const DEFAULT_VEHICLE: VehicleData = {
@@ -252,7 +303,7 @@ const Index = () => {
     setCalculating(true);
 
     try {
-      // Call Google Maps API + TollGuru via edge function
+      // Call TomTom/Google Maps API + TollGuru via edge function
       const routeCalcResult = await calculateRoute(pickups, deliveries, vehicle.axles, vehicle.cargoCapacity);
       
       if (!routeCalcResult) {
@@ -264,18 +315,99 @@ const Index = () => {
       const durationHours = routeCalcResult.totalDurationHours;
       const days = Math.ceil(durationHours / vehicle.drivingHoursPerDay);
       
-      // Calculate costs based on real distance
-      const fuelCost = (distance / vehicle.fuelConsumption) * vehicle.fuelPrice;
+      // ========== CUSTOS POR DIA (Fixos - anexados na placa) ==========
+      const dailyInsurance = (vehicle.insuranceYearly || 0) / 365;
+      const dailyRegistration = (vehicle.registrationYearly || 0) / 365;
+      const dailyDepreciation = ((vehicle.assetValue || 0) * ((vehicle.annualDepreciationRate || 0) / 100)) / 365;
+      const dailySalary = ((vehicle.driverSalaryMonthly || 0) * (vehicle.driverSalaryInclude13th ? 13.33 : 12)) / 365;
+      const dailyParking = (vehicle.parkingMonthly || 0) / 30;
+      const dailyTracking = (vehicle.trackingMonthly || 0) / 30;
+      const dailyAccounting = (vehicle.accountingMonthly || 0) / 30;
+      const dailyOtherFixed = (vehicle.otherFixedMonthly || 0) / 30;
+      
+      const totalDailyCost = dailyInsurance + dailyRegistration + dailyDepreciation + dailySalary + 
+                            dailyParking + dailyTracking + dailyAccounting + dailyOtherFixed;
+      const fixedCostForTrip = totalDailyCost * days;
+
+      // ========== CUSTOS POR KM (Variáveis - no resumo da viagem) ==========
+      const fuelPerKm = vehicle.fuelPrice / vehicle.fuelConsumption;
+      
+      // Pneus por km
+      const priceNew = vehicle.refTirePriceNew || 0;
+      const lifeNew = vehicle.refTireLifespanNew || 100000;
+      const priceRemold = vehicle.refTirePriceRemold || 0;
+      const lifeRemold = vehicle.refTireLifespanRemold || 60000;
+      const totalNewQty = (vehicle.tireSteerQtyNew || 0) + (vehicle.tireDriveQtyNew || 0) + (vehicle.tireTrailerQtyNew || 0);
+      const totalRemoldQty = (vehicle.tireSteerQtyRemold || 0) + (vehicle.tireDriveQtyRemold || 0) + (vehicle.tireTrailerQtyRemold || 0);
+      const tiresPerKm = (totalNewQty * priceNew / lifeNew) + (totalRemoldQty * priceRemold / lifeRemold);
+      
+      // Óleos por km
+      const oilPerKm = (vehicle.lastOilChangeCost || 0) / (vehicle.oilChangeIntervalKm || 20000);
+      const transOilPerKm = (vehicle.lastTransOilChangeCost || 0) / (vehicle.transOilChangeIntervalKm || 80000);
+      const filtersPerKm = (vehicle.lastFilterChangeCost || 0) / (vehicle.filterChangeIntervalKm || 20000);
+      
+      // Outros custos por km
+      const greasePerKm = vehicle.greaseCostPerKm || 0;
+      const washingPerKm = vehicle.washingCostPerKm || 0;
+      const otherMaintenancePerKm = vehicle.otherMaintenanceCostPerKm || 0;
+      
+      const totalPerKmCost = fuelPerKm + tiresPerKm + oilPerKm + transOilPerKm + filtersPerKm + 
+                             greasePerKm + washingPerKm + otherMaintenancePerKm;
+      const maintenanceCostForTrip = totalPerKmCost * distance;
+
+      // ========== CUSTOS POR VIAGEM ==========
       const tollCost = routeCalcResult.estimatedTollCost;
       const commission = totalFreight * (vehicle.driverCommissionPercentage / 100);
-      const maintenance = distance * 0.20;
-      const fixed = ((vehicle.insuranceYearly || 0) + (vehicle.registrationYearly || 0) + ((vehicle.driverSalaryMonthly || 0) * 13)) / 365 * days;
-      const totalCost = fuelCost + tollCost + commission + maintenance + fixed + (includeReturn ? returnCost : 0);
+      
+      // ARDA - Adicional de Remuneração de Descanso Assegurado (Lei 13.103/2015)
+      let ardaCost = 0;
+      if (vehicle.ardaEnabled) {
+        // Estima 2h de espera por dia em carga/descarga
+        const waitHoursPerDay = 2;
+        const totalWaitHours = waitHoursPerDay * days;
+        const hourlyRate = (vehicle.driverSalaryMonthly || 0) / 220; // 220 horas/mês
+        ardaCost = totalWaitHours * hourlyRate * ((vehicle.ardaPercentage || 30) / 100);
+      }
+
+      // ========== TOTAIS ==========
+      const fuelCost = fuelPerKm * distance;
+      const totalCost = fixedCostForTrip + maintenanceCostForTrip + tollCost + commission + ardaCost + (includeReturn ? returnCost : 0);
       const netProfit = totalFreight - totalCost;
 
       // Get origin and destination cities for AI analysis
       const originCity = pickups[0]?.address || 'Origem não informada';
       const destinationCity = deliveries[deliveries.length - 1]?.address || 'Destino não informado';
+
+      // Build cost breakdown
+      const costBreakdown = {
+        dailyCosts: {
+          insurance: dailyInsurance,
+          registration: dailyRegistration,
+          depreciation: dailyDepreciation,
+          salary: dailySalary,
+          parking: dailyParking,
+          tracking: dailyTracking,
+          accounting: dailyAccounting,
+          otherFixed: dailyOtherFixed,
+          total: totalDailyCost,
+        },
+        perKmCosts: {
+          fuel: fuelPerKm,
+          tires: tiresPerKm,
+          oil: oilPerKm,
+          transOil: transOilPerKm,
+          filters: filtersPerKm,
+          grease: greasePerKm,
+          washing: washingPerKm,
+          otherMaintenance: otherMaintenancePerKm,
+          total: totalPerKmCost,
+        },
+        tripCosts: {
+          tolls: tollCost,
+          commission: commission,
+          arda: ardaCost,
+        },
+      };
 
       // Call AI analysis
       let aiAnalysis: AIAnalysis | undefined;
@@ -289,13 +421,15 @@ const Index = () => {
               estimatedFuelCost: fuelCost,
               estimatedTollCost: tollCost,
               driverCommissionCost: commission,
-              estimatedMaintenanceCost: maintenance,
-              estimatedFixedCost: fixed,
+              estimatedMaintenanceCost: maintenanceCostForTrip,
+              estimatedFixedCost: fixedCostForTrip,
+              estimatedArdaCost: ardaCost,
               totalFreightIncome: totalFreight,
               netProfit,
               originCity,
               destinationCity,
               routeSummary: routeCalcResult.summary,
+              costBreakdown,
             },
             vehicleData: {
               axles: vehicle.axles,
@@ -332,8 +466,9 @@ const Index = () => {
         estimatedFuelCost: fuelCost,
         estimatedTollCost: tollCost,
         driverCommissionCost: commission,
-        estimatedMaintenanceCost: maintenance,
-        estimatedFixedCost: fixed,
+        estimatedMaintenanceCost: maintenanceCostForTrip,
+        estimatedFixedCost: fixedCostForTrip,
+        estimatedArdaCost: ardaCost,
         returnCost: includeReturn ? returnCost : undefined,
         totalFreightIncome: totalFreight,
         netProfit,
@@ -346,6 +481,8 @@ const Index = () => {
         originCity,
         destinationCity,
         vehicleRestrictions: routeCalcResult.vehicleRestrictions,
+        routingEngine: routeCalcResult.routingEngine,
+        costBreakdown,
       };
 
       setResult(simulationResult);
@@ -362,8 +499,8 @@ const Index = () => {
           estimated_fuel_cost: fuelCost,
           estimated_toll_cost: tollCost,
           driver_commission_cost: commission,
-          estimated_maintenance_cost: maintenance,
-          estimated_fixed_cost: fixed,
+          estimated_maintenance_cost: maintenanceCostForTrip,
+          estimated_fixed_cost: fixedCostForTrip,
           total_freight_income: totalFreight,
           net_profit: netProfit,
           viability_score: simulationResult.viabilityScore,

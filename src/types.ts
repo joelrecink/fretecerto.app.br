@@ -29,10 +29,40 @@ export interface VehicleData {
   
   // Advanced Cost Fields (Optional)
   licensePlate?: string;
+  modelName?: string; // Modelo do veículo
   assetValue?: number; // Valor do Bem (para depreciação/uso)
   annualDepreciationRate?: number; // Depreciação Anual (%)
   insuranceYearly?: number; // Seguro Anual
   registrationYearly?: number; // IPVA/Licenciamento Anual
+  
+  // ========================================================================
+  // CUSTOS FIXOS ADICIONAIS (por dia)
+  // ========================================================================
+  parkingMonthly?: number; // Estacionamento mensal
+  trackingMonthly?: number; // Rastreador mensal
+  accountingMonthly?: number; // Contador mensal
+  otherFixedMonthly?: number; // Outros custos fixos mensais
+  
+  // ========================================================================
+  // CUSTOS VARIÁVEIS ADICIONAIS (por km)
+  // ========================================================================
+  otherMaintenanceCostPerKm?: number; // Outros custos de manutenção por km
+  greaseCostPerKm?: number; // Graxa/lubrificação por km
+  washingCostPerKm?: number; // Lavagem por km
+  
+  // ========================================================================
+  // ARDA - Adicional de Remuneração de Descanso Assegurado (Lei 13.103/2015)
+  // ========================================================================
+  ardaEnabled?: boolean; // Habilitar cálculo de ARDA
+  ardaPercentage?: number; // Percentual de ARDA (padrão 30% sobre horas extras)
+  
+  // ========================================================================
+  // DIMENSÕES DO VEÍCULO (para TomTom Truck Routing)
+  // ========================================================================
+  vehicleWeight?: number; // Peso total em kg
+  vehicleHeight?: number; // Altura em metros
+  vehicleWidth?: number; // Largura em metros
+  vehicleLength?: number; // Comprimento em metros
   
   // ========================================================================
   // TIRE MANAGEMENT - GOLDEN MASTER (DO NOT MODIFY)
@@ -184,6 +214,7 @@ export interface SimulationResult {
   driverCommissionCost: number;
   estimatedMaintenanceCost: number; // Pure Variable costs (Tires + Fluids)
   estimatedFixedCost?: number; // New: Prorated Fixed Costs (Salary, Insurance, etc)
+  estimatedArdaCost?: number; // ARDA - Adicional de Descanso Remunerado
   tollPlazas: TollPlaza[]; 
   totalFreightIncome: number;
   netProfit: number;
@@ -191,6 +222,40 @@ export interface SimulationResult {
   viabilityMessage: string;
   routeSuggestions: string;
   groundingUrls: Array<{ title: string; uri: string }>;
+  
+  // Detalhamento de custos separados
+  costBreakdown?: {
+    // Custos por DIA (anexados na placa)
+    dailyCosts: {
+      insurance: number; // Seguro/dia
+      registration: number; // IPVA/Licenciamento por dia
+      depreciation: number; // Depreciação por dia
+      salary: number; // Salário + encargos por dia
+      parking: number; // Estacionamento por dia
+      tracking: number; // Rastreador por dia
+      accounting: number; // Contador por dia
+      otherFixed: number; // Outros fixos por dia
+      total: number;
+    };
+    // Custos por KM (no resumo da viagem)
+    perKmCosts: {
+      fuel: number; // Combustível por km
+      tires: number; // Pneus por km
+      oil: number; // Óleo motor por km
+      transOil: number; // Óleo câmbio por km
+      filters: number; // Filtros por km
+      grease: number; // Graxa por km
+      washing: number; // Lavagem por km
+      otherMaintenance: number; // Outras manutenções por km
+      total: number;
+    };
+    // Custos por viagem
+    tripCosts: {
+      tolls: number;
+      commission: number;
+      arda: number;
+    };
+  };
 }
 
 export interface UserCredits {
