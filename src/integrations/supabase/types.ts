@@ -322,6 +322,7 @@ export type Database = {
           driver_salary_include_13th: boolean | null
           driver_salary_monthly: number | null
           driving_hours_per_day: number | null
+          estimated_wait_hours_per_day: number | null
           filter_change_interval_km: number | null
           fuel_consumption: number
           fuel_price: number
@@ -332,6 +333,7 @@ export type Database = {
           license_plate: string
           model_name: string | null
           oil_change_interval_km: number | null
+          payroll_charges_percentage: number | null
           ref_tire_lifespan_new: number | null
           ref_tire_lifespan_remold: number | null
           ref_tire_price_new: number | null
@@ -357,6 +359,7 @@ export type Database = {
           driver_salary_include_13th?: boolean | null
           driver_salary_monthly?: number | null
           driving_hours_per_day?: number | null
+          estimated_wait_hours_per_day?: number | null
           filter_change_interval_km?: number | null
           fuel_consumption?: number
           fuel_price?: number
@@ -367,6 +370,7 @@ export type Database = {
           license_plate: string
           model_name?: string | null
           oil_change_interval_km?: number | null
+          payroll_charges_percentage?: number | null
           ref_tire_lifespan_new?: number | null
           ref_tire_lifespan_remold?: number | null
           ref_tire_price_new?: number | null
@@ -392,6 +396,7 @@ export type Database = {
           driver_salary_include_13th?: boolean | null
           driver_salary_monthly?: number | null
           driving_hours_per_day?: number | null
+          estimated_wait_hours_per_day?: number | null
           filter_change_interval_km?: number | null
           fuel_consumption?: number
           fuel_price?: number
@@ -402,6 +407,7 @@ export type Database = {
           license_plate?: string
           model_name?: string | null
           oil_change_interval_km?: number | null
+          payroll_charges_percentage?: number | null
           ref_tire_lifespan_new?: number | null
           ref_tire_lifespan_remold?: number | null
           ref_tire_price_new?: number | null

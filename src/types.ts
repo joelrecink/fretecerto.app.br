@@ -55,6 +55,10 @@ export interface VehicleData {
   // ========================================================================
   ardaEnabled?: boolean; // Habilitar cálculo de ARDA
   ardaPercentage?: number; // Percentual de ARDA (padrão 30% sobre horas extras)
+  estimatedWaitHoursPerDay?: number; // Horas estimadas de espera/dia em carga/descarga (default 2)
+
+  // Encargos trabalhistas sobre a folha (FGTS, INSS, provisões)
+  payrollChargesPercentage?: number; // % sobre o salário (default 0)
   
   // ========================================================================
   // DIMENSÕES DO VEÍCULO (para TomTom Truck Routing)
@@ -181,6 +185,8 @@ export interface SavedVehicle {
   annual_depreciation_rate?: number;
   insurance_yearly?: number;
   registration_yearly?: number;
+  payroll_charges_percentage?: number;
+  estimated_wait_hours_per_day?: number;
 }
 
 export type PointType = 'pickup' | 'delivery' | 'waypoint';

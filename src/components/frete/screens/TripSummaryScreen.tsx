@@ -47,19 +47,44 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
 }) => {
   const navigate = useNavigate();
   const [includeReturn, setIncludeReturn] = useState(false);
+  const [returnDistance, setReturnDistance] = useState<number>(0);
+  const [returnDistanceInput, setReturnDistanceInput] = useState<string>('');
   const [estimatedReturnCost, setEstimatedReturnCost] = useState(0);
 
-  // Calculate estimated return cost when toggle is enabled
+  // Inicializa a distância de retorno com a distância da ida ao ativar o toggle
   useEffect(() => {
-    if (includeReturn && estimatedDistance && vehicleInfo.fuelConsumption && vehicleInfo.fuelPrice) {
-      // Estimate return cost: fuel + estimated maintenance
-      const fuelCost = (estimatedDistance / vehicleInfo.fuelConsumption) * vehicleInfo.fuelPrice;
-      const maintenanceCost = estimatedDistance * 0.20; // R$0.20/km
+    if (includeReturn && estimatedDistance && returnDistance === 0) {
+      setReturnDistance(estimatedDistance);
+      setReturnDistanceInput(String(estimatedDistance.toFixed(0)));
+    }
+  }, [includeReturn, estimatedDistance]);
+
+  // Recalcula o custo de retorno conforme a distância editada
+  useEffect(() => {
+    if (includeReturn && returnDistance > 0 && vehicleInfo.fuelConsumption && vehicleInfo.fuelPrice) {
+      // Caminhão vazio consome ~25% menos -> consumo efetivo aumenta ~33%
+      const emptyConsumption = vehicleInfo.fuelConsumption / 0.75;
+      const fuelCost = (returnDistance / emptyConsumption) * vehicleInfo.fuelPrice;
+      const maintenanceCost = returnDistance * 0.20; // R$0.20/km
       setEstimatedReturnCost(fuelCost + maintenanceCost);
     } else {
       setEstimatedReturnCost(0);
     }
-  }, [includeReturn, estimatedDistance, vehicleInfo.fuelConsumption, vehicleInfo.fuelPrice]);
+  }, [includeReturn, returnDistance, vehicleInfo.fuelConsumption, vehicleInfo.fuelPrice]);
+
+  const handleReturnDistanceChange = (value: string) => {
+    const cleaned = value.replace(/[^0-9.,]/g, '').replace(',', '.');
+    setReturnDistanceInput(cleaned);
+    const num = parseFloat(cleaned);
+    setReturnDistance(isNaN(num) ? 0 : num);
+  };
+
+  const resetReturnDistance = () => {
+    if (estimatedDistance) {
+      setReturnDistance(estimatedDistance);
+      setReturnDistanceInput(String(estimatedDistance.toFixed(0)));
+    }
+  };
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
@@ -262,14 +287,40 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
             />
           </div>
 
-          {/* Return Cost Estimate */}
+          {/* Return Cost Estimate + editable distance */}
           {includeReturn && (
-            <div className="mt-4 pt-4 border-t border-[hsl(var(--border))]">
+            <div className="mt-4 pt-4 border-t border-[hsl(var(--border))] space-y-3">
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[hsl(var(--foreground))] uppercase">
+                    Distância de retorno (km)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={resetReturnDistance}
+                    className="text-xs text-blue-600 hover:underline font-medium"
+                  >
+                    Usar distância da ida
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={returnDistanceInput}
+                  onChange={(e) => handleReturnDistanceChange(e.target.value)}
+                  placeholder={estimatedDistance ? String(estimatedDistance.toFixed(0)) : '0'}
+                  className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                />
+                <p className="text-xs text-[hsl(var(--muted-foreground))] mt-1">
+                  Distância da ida: {estimatedDistance?.toLocaleString('pt-BR') || '—'} km. Edite se o retorno é mais curto/longo (ex.: pegar nova carga no caminho).
+                </p>
+              </div>
+
               <div className="flex items-center justify-between bg-amber-50 p-4 rounded-xl">
                 <div>
                   <p className="text-sm text-amber-800 font-medium">Custo estimado de retorno</p>
                   <p className="text-xs text-amber-600">
-                    Combustível + manutenção ({estimatedDistance?.toLocaleString('pt-BR') || '—'} km)
+                    Combustível (vazio, +33% economia) + manutenção ({returnDistance.toLocaleString('pt-BR')} km)
                   </p>
                 </div>
                 <p className="text-xl font-bold text-amber-700">

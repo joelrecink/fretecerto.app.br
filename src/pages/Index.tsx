@@ -69,6 +69,9 @@ interface VehicleData {
   // ARDA
   ardaEnabled?: boolean;
   ardaPercentage?: number;
+  estimatedWaitHoursPerDay?: number;
+  // Encargos trabalhistas sobre a folha (%)
+  payrollChargesPercentage?: number;
   // Dimensões do veículo (TomTom)
   vehicleWeight?: number;
   vehicleHeight?: number;
@@ -228,6 +231,8 @@ const Index = () => {
       annualDepreciationRate: v.annual_depreciation_rate || undefined,
       insuranceYearly: v.insurance_yearly || undefined,
       registrationYearly: v.registration_yearly || undefined,
+      payrollChargesPercentage: (v as any).payroll_charges_percentage ?? undefined,
+      estimatedWaitHoursPerDay: (v as any).estimated_wait_hours_per_day ?? undefined,
       currentOdometer: v.current_odometer || undefined,
       // Tire References
       refTirePriceNew: v.ref_tire_price_new || undefined,
@@ -313,18 +318,26 @@ const Index = () => {
 
       const distance = routeCalcResult.totalDistanceKm;
       const durationHours = routeCalcResult.totalDurationHours;
-      const days = Math.ceil(durationHours / vehicle.drivingHoursPerDay);
-      
+
+      // ========== DIAS DA VIAGEM (Lei do Motorista 13.103/2015) ==========
+      // ceil(horas / horasDirigidasDia) + repouso semanal de 1 dia a cada 6 dias trabalhados
+      const effectiveDays = Math.ceil(durationHours / vehicle.drivingHoursPerDay);
+      const weeklyRestDays = Math.floor(effectiveDays / 6);
+      const days = effectiveDays + weeklyRestDays;
+
       // ========== CUSTOS POR DIA (Fixos - anexados na placa) ==========
+      const MONTH_TO_DAY = 30.44; // 365/12 — alinhado com divisor anual /365
+      const payrollChargesFactor = 1 + ((vehicle.payrollChargesPercentage || 0) / 100);
+
       const dailyInsurance = (vehicle.insuranceYearly || 0) / 365;
       const dailyRegistration = (vehicle.registrationYearly || 0) / 365;
       const dailyDepreciation = ((vehicle.assetValue || 0) * ((vehicle.annualDepreciationRate || 0) / 100)) / 365;
-      const dailySalary = ((vehicle.driverSalaryMonthly || 0) * (vehicle.driverSalaryInclude13th ? 13.33 : 12)) / 365;
-      const dailyParking = (vehicle.parkingMonthly || 0) / 30;
-      const dailyTracking = (vehicle.trackingMonthly || 0) / 30;
-      const dailyAccounting = (vehicle.accountingMonthly || 0) / 30;
-      const dailyOtherFixed = (vehicle.otherFixedMonthly || 0) / 30;
-      
+      const dailySalary = (((vehicle.driverSalaryMonthly || 0) * (vehicle.driverSalaryInclude13th ? 13.33 : 12)) / 365) * payrollChargesFactor;
+      const dailyParking = (vehicle.parkingMonthly || 0) / MONTH_TO_DAY;
+      const dailyTracking = (vehicle.trackingMonthly || 0) / MONTH_TO_DAY;
+      const dailyAccounting = (vehicle.accountingMonthly || 0) / MONTH_TO_DAY;
+      const dailyOtherFixed = (vehicle.otherFixedMonthly || 0) / MONTH_TO_DAY;
+
       const totalDailyCost = dailyInsurance + dailyRegistration + dailyDepreciation + dailySalary + 
                             dailyParking + dailyTracking + dailyAccounting + dailyOtherFixed;
       const fixedCostForTrip = totalDailyCost * days;
@@ -354,6 +367,9 @@ const Index = () => {
       const totalPerKmCost = fuelPerKm + tiresPerKm + oilPerKm + transOilPerKm + filtersPerKm + 
                              greasePerKm + washingPerKm + otherMaintenancePerKm;
       const maintenanceCostForTrip = totalPerKmCost * distance;
+      // Separa combustível para evitar dupla contagem no detalhamento salvo / gráfico
+      const fuelCost = fuelPerKm * distance;
+      const maintenanceVariableOnly = maintenanceCostForTrip - fuelCost;
 
       // ========== CUSTOS POR VIAGEM ==========
       const tollCost = routeCalcResult.estimatedTollCost;
@@ -362,15 +378,14 @@ const Index = () => {
       // ARDA - Adicional de Remuneração de Descanso Assegurado (Lei 13.103/2015)
       let ardaCost = 0;
       if (vehicle.ardaEnabled) {
-        // Estima 2h de espera por dia em carga/descarga
-        const waitHoursPerDay = 2;
+        const waitHoursPerDay = vehicle.estimatedWaitHoursPerDay ?? 2;
         const totalWaitHours = waitHoursPerDay * days;
-        const hourlyRate = (vehicle.driverSalaryMonthly || 0) / 220; // 220 horas/mês
+        const baseHourlyRate = (vehicle.driverSalaryMonthly || 0) / 220; // 220 horas/mês
+        const hourlyRate = baseHourlyRate * payrollChargesFactor;
         ardaCost = totalWaitHours * hourlyRate * ((vehicle.ardaPercentage || 30) / 100);
       }
 
       // ========== TOTAIS ==========
-      const fuelCost = fuelPerKm * distance;
       const totalCost = fixedCostForTrip + maintenanceCostForTrip + tollCost + commission + ardaCost + (includeReturn ? returnCost : 0);
       const netProfit = totalFreight - totalCost;
 
@@ -466,7 +481,7 @@ const Index = () => {
         estimatedFuelCost: fuelCost,
         estimatedTollCost: tollCost,
         driverCommissionCost: commission,
-        estimatedMaintenanceCost: maintenanceCostForTrip,
+        estimatedMaintenanceCost: maintenanceVariableOnly,
         estimatedFixedCost: fixedCostForTrip,
         estimatedArdaCost: ardaCost,
         returnCost: includeReturn ? returnCost : undefined,
@@ -499,7 +514,7 @@ const Index = () => {
           estimated_fuel_cost: fuelCost,
           estimated_toll_cost: tollCost,
           driver_commission_cost: commission,
-          estimated_maintenance_cost: maintenanceCostForTrip,
+          estimated_maintenance_cost: maintenanceVariableOnly,
           estimated_fixed_cost: fixedCostForTrip,
           total_freight_income: totalFreight,
           net_profit: netProfit,
@@ -534,6 +549,8 @@ const Index = () => {
       annual_depreciation_rate: vehicle.annualDepreciationRate,
       insurance_yearly: vehicle.insuranceYearly,
       registration_yearly: vehicle.registrationYearly,
+      payroll_charges_percentage: vehicle.payrollChargesPercentage,
+      estimated_wait_hours_per_day: vehicle.estimatedWaitHoursPerDay,
       current_odometer: vehicle.currentOdometer,
       // Tire References
       ref_tire_price_new: vehicle.refTirePriceNew,
