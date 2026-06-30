@@ -16,11 +16,11 @@ interface RouteRequest {
   origins: RoutePoint[];
   destinations: RoutePoint[];
   axles: number;
-  cargoCapacity?: number; // in tons
-  vehicleWeight?: number; // total vehicle weight in kg
-  vehicleHeight?: number; // height in meters
-  vehicleWidth?: number;  // width in meters
-  vehicleLength?: number; // length in meters
+  cargoCapacity?: number; // tons
+  vehicleWeight?: number; // kg
+  vehicleHeight?: number; // m
+  vehicleWidth?: number;  // m
+  vehicleLength?: number; // m
 }
 
 interface TollDetail {
@@ -33,475 +33,306 @@ interface TollDetail {
   currency: string;
 }
 
-// Geocode address using Google Geocoding API
-async function geocodeAddress(address: string, apiKey: string): Promise<{ lat: number; lng: number } | null> {
+// ---------- Geocoding via HERE ----------
+async function hereGeocode(address: string, apiKey: string): Promise<{ lat: number; lng: number } | null> {
   try {
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}&language=pt-BR&region=br`
-    );
-    const data = await response.json();
-    if (data.status === 'OK' && data.results[0]) {
-      return {
-        lat: data.results[0].geometry.location.lat,
-        lng: data.results[0].geometry.location.lng,
-      };
-    }
-    console.error('Geocode failed for:', address, data.status);
+    const url = `https://geocode.search.hereapi.com/v1/geocode?q=${encodeURIComponent(address)}&in=countryCode:BRA&lang=pt-BR&apiKey=${apiKey}`;
+    const r = await fetch(url);
+    const data = await r.json();
+    const pos = data?.items?.[0]?.position;
+    if (pos) return { lat: pos.lat, lng: pos.lng };
+    console.error('HERE geocode failed:', address, JSON.stringify(data));
     return null;
-  } catch (error) {
-    console.error('Geocode error:', error);
+  } catch (e) {
+    console.error('HERE geocode error:', e);
     return null;
   }
 }
 
+// ---------- HERE Routing v8 ----------
+async function calculateHereRoute(
+  points: Array<{ lat: number; lng: number; address: string }>,
+  opts: { axles: number; weightKg: number; heightM: number; widthM: number; lengthM: number },
+  apiKey: string,
+) {
+  const origin = `${points[0].lat},${points[0].lng}`;
+  const destination = `${points[points.length - 1].lat},${points[points.length - 1].lng}`;
+  const vias = points.slice(1, -1).map(p => `via=${p.lat},${p.lng}`);
+
+  const params = new URLSearchParams({
+    transportMode: 'truck',
+    origin,
+    destination,
+    return: 'polyline,summary,tolls',
+    'vehicle[grossWeight]': String(Math.round(opts.weightKg)),
+    'vehicle[height]': String(Math.round(opts.heightM * 100)),  // cm
+    'vehicle[width]': String(Math.round(opts.widthM * 100)),
+    'vehicle[length]': String(Math.round(opts.lengthM * 100)),
+    'vehicle[axleCount]': String(opts.axles),
+    currency: 'BRL',
+    lang: 'pt-BR',
+    apiKey,
+  });
+  // URLSearchParams won't accept duplicate `via` cleanly across all envs — build URL manually
+  let url = `https://router.hereapi.com/v8/routes?${params.toString()}`;
+  if (vias.length) url += '&' + vias.join('&');
+
+  const r = await fetch(url);
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(`HERE Routing error ${r.status}: ${text}`);
+  }
+  const data = await r.json();
+  if (!data.routes || !data.routes[0]) {
+    throw new Error('HERE Routing: no routes returned');
+  }
+  return data.routes[0];
+}
+
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Validate authentication
+    // ---- Auth ----
     const authHeader = req.headers.get('Authorization');
     if (!authHeader) {
-      console.error('Missing authorization header');
       return new Response(JSON.stringify({ success: false, error: 'Missing authorization' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
       { global: { headers: { Authorization: authHeader } } }
     );
-
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) {
-      console.error('Invalid authentication token:', authError?.message);
       return new Response(JSON.stringify({ success: false, error: 'Invalid authentication token' }), {
-        status: 401,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    console.log('Authenticated user:', user.id);
-
+    const hereApiKey = Deno.env.get('HERE_API_KEY');
     const tomtomApiKey = Deno.env.get('TOMTOM_API_KEY');
-    const googleApiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
-    const tollGuruApiKey = Deno.env.get('TOLLGURU_API_KEY');
-    
-    if (!tomtomApiKey && !googleApiKey) {
-      console.error('No routing API key configured');
-      throw new Error('No routing API configured');
+    if (!hereApiKey && !tomtomApiKey) {
+      throw new Error('No routing provider configured (HERE or TomTom)');
     }
 
-    const { 
-      origins, 
-      destinations, 
-      axles, 
-      cargoCapacity,
-      vehicleWeight,
-      vehicleHeight,
-      vehicleWidth,
-      vehicleLength 
+    const {
+      origins, destinations, axles,
+      cargoCapacity, vehicleWeight, vehicleHeight, vehicleWidth, vehicleLength,
     } = await req.json() as RouteRequest;
-    
-    console.log('Calculating route for user:', user.id, { origins, destinations, axles, cargoCapacity });
 
-    // Build all waypoints in order: origins -> destinations
+    console.log('Calculating route', { user: user.id, axles, cargoCapacity });
+
     const allPoints = [...origins, ...destinations];
-    
-    if (allPoints.length < 2) {
-      throw new Error('At least 2 points required for route calculation');
-    }
+    if (allPoints.length < 2) throw new Error('At least 2 points required');
 
-    // Geocode all addresses first
-    const geocodedPoints: Array<{address: string; lat: number; lng: number}> = [];
-    for (const point of allPoints) {
-      if (point.lat && point.lng) {
-        geocodedPoints.push({ address: point.address, lat: point.lat, lng: point.lng });
-      } else if (googleApiKey) {
-        const coords = await geocodeAddress(point.address, googleApiKey);
-        if (coords) {
-          geocodedPoints.push({ address: point.address, ...coords });
-        } else {
-          throw new Error(`Could not geocode address: ${point.address}`);
-        }
+    // ---- Vehicle defaults ----
+    const weightKg = vehicleWeight || (7500 + Math.max(0, axles - 2) * 8000);
+    const heightM = vehicleHeight || 4.0;
+    const widthM = vehicleWidth || 2.55;
+    const lengthM = vehicleLength || (axles <= 4 ? 14 : axles <= 6 ? 18.15 : 19.8);
+
+    // ---- Geocode via HERE ----
+    if (!hereApiKey) throw new Error('HERE_API_KEY not configured');
+    const geocodedPoints: Array<{ address: string; lat: number; lng: number }> = [];
+    for (const p of allPoints) {
+      if (p.lat && p.lng) {
+        geocodedPoints.push({ address: p.address, lat: p.lat, lng: p.lng });
       } else {
-        throw new Error('Cannot geocode without Google Maps API key');
+        const c = await hereGeocode(p.address, hereApiKey);
+        if (!c) throw new Error(`Endereço não encontrado: ${p.address}`);
+        geocodedPoints.push({ address: p.address, ...c });
       }
     }
 
     let totalDistanceKm = 0;
     let totalDurationHours = 0;
-    let routeDetails: Array<{from: string; to: string; distance: number; duration: number}> = [];
     let polyline: string | null = null;
-    let routeWarnings: string[] = [];
-    let avoidedRoutes: string[] = [];
-    let bounds: any = null;
-    let summary = '';
-
-    // TomTom Truck Routing (preferred for heavy vehicles)
-    if (tomtomApiKey && axles >= 3) {
-      console.log('Using TomTom Truck Routing API for heavy vehicle');
-      
-      try {
-        // Build waypoints for TomTom
-        const locations = geocodedPoints.map(p => `${p.lat},${p.lng}`).join(':');
-        
-        // Calculate vehicle specifications based on axles
-        const defaultWeight = 7500 + (axles - 2) * 8000; // Base weight + per axle
-        const weight = vehicleWeight || defaultWeight;
-        const height = vehicleHeight || 4.0; // Default 4m for trucks
-        const width = vehicleWidth || 2.55; // Default 2.55m (BR limit)
-        const length = vehicleLength || (axles <= 4 ? 14 : axles <= 6 ? 18.15 : 19.8); // BR limits
-        
-        // TomTom Calculate Route API for trucks
-        const tomtomUrl = new URL(`https://api.tomtom.com/routing/1/calculateRoute/${locations}/json`);
-        tomtomUrl.searchParams.append('key', tomtomApiKey);
-        tomtomUrl.searchParams.append('traffic', 'true');
-        tomtomUrl.searchParams.append('travelMode', 'truck');
-        tomtomUrl.searchParams.append('vehicleWeight', weight.toString());
-        tomtomUrl.searchParams.append('vehicleAxleWeight', Math.round(weight / axles).toString());
-        tomtomUrl.searchParams.append('vehicleHeight', (height * 100).toString()); // cm
-        tomtomUrl.searchParams.append('vehicleWidth', (width * 100).toString()); // cm
-        tomtomUrl.searchParams.append('vehicleLength', (length * 100).toString()); // cm
-        tomtomUrl.searchParams.append('vehicleMaxSpeed', '90'); // Max speed for trucks in Brazil
-        tomtomUrl.searchParams.append('vehicleEngineType', 'diesel');
-        tomtomUrl.searchParams.append('vehicleLoadType', 'otherHazmatGeneral');
-        tomtomUrl.searchParams.append('hilliness', 'normal');
-        tomtomUrl.searchParams.append('windingness', 'normal');
-        tomtomUrl.searchParams.append('avoid', 'unpavedRoads');
-        tomtomUrl.searchParams.append('routeType', 'fastest');
-        tomtomUrl.searchParams.append('instructionsType', 'text');
-        tomtomUrl.searchParams.append('language', 'pt-BR');
-
-        console.log('TomTom API URL:', tomtomUrl.toString().replace(tomtomApiKey, 'REDACTED'));
-        
-        const tomtomResponse = await fetch(tomtomUrl.toString());
-        
-        if (tomtomResponse.ok) {
-          const tomtomData = await tomtomResponse.json();
-          
-          if (tomtomData.routes && tomtomData.routes[0]) {
-            const route = tomtomData.routes[0];
-            const routeSummary = route.summary;
-            
-            totalDistanceKm = routeSummary.lengthInMeters / 1000;
-            totalDurationHours = routeSummary.travelTimeInSeconds / 3600;
-            
-            // Extract route details per leg
-            if (route.legs) {
-              for (let i = 0; i < route.legs.length; i++) {
-                const leg = route.legs[i];
-                routeDetails.push({
-                  from: geocodedPoints[i]?.address || `Ponto ${i + 1}`,
-                  to: geocodedPoints[i + 1]?.address || `Ponto ${i + 2}`,
-                  distance: leg.summary.lengthInMeters / 1000,
-                  duration: leg.summary.travelTimeInSeconds / 60,
-                });
-              }
-            }
-
-            // Get polyline from TomTom (convert to Google-compatible format)
-            if (route.legs) {
-              const allPoints: string[] = [];
-              for (const leg of route.legs) {
-                if (leg.points) {
-                  for (const point of leg.points) {
-                    allPoints.push(`${point.latitude},${point.longitude}`);
-                  }
-                }
-              }
-              // For now, we'll use the points directly - TomTom returns lat/lng pairs
-              polyline = allPoints.join('|');
-            }
-
-            // Check for vehicle restrictions in the route
-            if (routeSummary.noTrafficIncidentOnRoute === false) {
-              routeWarnings.push('⚠️ Possíveis incidentes de tráfego na rota');
-            }
-            
-            // Build bounds
-            const lats = geocodedPoints.map(p => p.lat);
-            const lngs = geocodedPoints.map(p => p.lng);
-            bounds = {
-              northeast: { lat: Math.max(...lats), lng: Math.max(...lngs) },
-              southwest: { lat: Math.min(...lats), lng: Math.min(...lngs) },
-            };
-
-            summary = `TomTom Truck Route (${axles} eixos, ${Math.round(weight/1000)}t)`;
-            routeWarnings.push(`✓ Rota otimizada para caminhão de ${axles} eixos`);
-            
-            console.log('TomTom route calculated successfully:', {
-              distance: totalDistanceKm,
-              duration: totalDurationHours,
-            });
-          }
-        } else {
-          const errorText = await tomtomResponse.text();
-          console.error('TomTom API error:', tomtomResponse.status, errorText);
-          // Fall back to Google
-        }
-      } catch (tomtomError) {
-        console.error('TomTom API failed, falling back to Google:', tomtomError);
-      }
-    }
-
-    // Fallback to Google Maps if TomTom didn't work or for lighter vehicles
-    if (totalDistanceKm === 0 && googleApiKey) {
-      console.log('Using Google Maps Directions API');
-      
-      const origin = allPoints[0].address;
-      const destination = allPoints[allPoints.length - 1].address;
-      const waypoints = allPoints.slice(1, -1).map(p => p.address);
-
-      // Define road restrictions based on vehicle size (axles)
-      const restrictedRoads: { [key: string]: { minAxles: number; description: string } } = {
-        'Serra do Rio do Rastro': { minAxles: 6, description: 'Íngreme e perigosa para veículos pesados' },
-        'SC-430': { minAxles: 6, description: 'Serra do Rio do Rastro - proibida para veículos pesados' },
-        'Serra do Corvo Branco': { minAxles: 7, description: 'Estrada íngreme com curvas fechadas' },
-        'SC-370': { minAxles: 7, description: 'Serra do Corvo Branco - restrita para veículos muito pesados' },
-        'Rodovia da Morte': { minAxles: 5, description: 'Alto risco para veículos pesados' },
-        'Serra das Araras': { minAxles: 7, description: 'Declive acentuado' },
-        'Via Anchieta subida': { minAxles: 8, description: 'Restrições para veículos muito pesados' },
-      };
-
-      // Check for restrictions that apply to this vehicle
-      const applicableRestrictions = Object.entries(restrictedRoads)
-        .filter(([_, restriction]) => axles >= restriction.minAxles)
-        .map(([road, restriction]) => ({ road, ...restriction }));
-
-      console.log(`Vehicle has ${axles} axles. Applicable restrictions:`, applicableRestrictions);
-
-      let directionsUrl = `https://maps.googleapis.com/maps/api/directions/json?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&key=${googleApiKey}&language=pt-BR&region=br`;
-      
-      if (waypoints.length > 0) {
-        directionsUrl += `&waypoints=${waypoints.map(w => encodeURIComponent(w)).join('|')}`;
-      }
-
-      // For heavy vehicles, request alternatives
-      if (axles >= 6) {
-        directionsUrl += '&alternatives=true';
-      }
-
-      console.log('Calling Google Directions API...');
-      const directionsResponse = await fetch(directionsUrl);
-      const directionsData = await directionsResponse.json();
-
-      if (directionsData.status !== 'OK') {
-        console.error('Directions API error:', directionsData.status, directionsData.error_message);
-        throw new Error(`Google Directions API error: ${directionsData.status} - ${directionsData.error_message || 'Unknown error'}`);
-      }
-
-      // Filter routes to avoid restricted roads for heavy vehicles
-      let selectedRoute = directionsData.routes[0];
-
-      if (axles >= 6 && directionsData.routes.length > 1) {
-        for (const route of directionsData.routes) {
-          const routeSummary = (route.summary || '').toLowerCase();
-          const routeSteps = route.legs.flatMap((leg: any) => 
-            leg.steps.map((step: any) => (step.html_instructions || '').toLowerCase())
-          ).join(' ');
-          const fullRouteText = `${routeSummary} ${routeSteps}`;
-
-          let hasRestriction = false;
-          for (const restriction of applicableRestrictions) {
-            const roadLower = restriction.road.toLowerCase();
-            if (fullRouteText.includes(roadLower)) {
-              hasRestriction = true;
-              avoidedRoutes.push(`${restriction.road}: ${restriction.description}`);
-              console.log(`Route via ${route.summary} contains restricted road: ${restriction.road}`);
-              break;
-            }
-          }
-
-          if (!hasRestriction) {
-            selectedRoute = route;
-            console.log(`Selected alternative route via ${route.summary} (avoids restricted roads)`);
-            break;
-          }
-        }
-
-        if (avoidedRoutes.length === directionsData.routes.length) {
-          console.warn('All available routes contain restricted roads for this vehicle');
-          routeWarnings.push(`⚠️ ATENÇÃO: Veículo de ${axles} eixos pode ter restrições nesta rota`);
-          for (const avoided of avoidedRoutes) {
-            routeWarnings.push(`• ${avoided}`);
-          }
-        } else if (avoidedRoutes.length > 0) {
-          routeWarnings.push(`✓ Rota otimizada para veículo de ${axles} eixos`);
-          routeWarnings.push(`Trechos evitados: ${avoidedRoutes.map(r => r.split(':')[0]).join(', ')}`);
-        }
-      }
-
-      const route = selectedRoute;
-      const legs = route.legs;
-
-      // Calculate total distance and duration
-      let totalDistanceMeters = 0;
-      let totalDurationSeconds = 0;
-
-      for (const leg of legs) {
-        totalDistanceMeters += leg.distance.value;
-        totalDurationSeconds += leg.duration.value;
-        routeDetails.push({
-          from: leg.start_address,
-          to: leg.end_address,
-          distance: leg.distance.value / 1000,
-          duration: leg.duration.value / 60,
-        });
-      }
-
-      totalDistanceKm = totalDistanceMeters / 1000;
-      totalDurationHours = totalDurationSeconds / 3600;
-      polyline = route.overview_polyline?.points || null;
-      bounds = route.bounds;
-      summary = route.summary || '';
-
-      // Update geocoded points from Google response
-      geocodedPoints.length = 0;
-      if (legs[0]) {
-        geocodedPoints.push({
-          address: legs[0].start_address,
-          lat: legs[0].start_location.lat,
-          lng: legs[0].start_location.lng,
-        });
-      }
-      for (const leg of legs) {
-        geocodedPoints.push({
-          address: leg.end_address,
-          lat: leg.end_location.lat,
-          lng: leg.end_location.lng,
-        });
-      }
-    }
-
-    // Calculate tolls using TollGuru API if available
+    let routeDetails: Array<{ from: string; to: string; distance: number; duration: number }> = [];
     let estimatedTollCost = 0;
     let tollDetails: TollDetail[] = [];
-    let tollSource = 'estimated';
+    let tollSource: 'here' | 'unavailable' = 'unavailable';
+    let routingEngine: 'here' | 'tomtom' = 'here';
+    let routeWarnings: string[] = [];
+    let summary = '';
 
-    if (tollGuruApiKey && polyline) {
-      try {
-        console.log('Calling TollGuru API for toll calculation...');
-        
-        // Map axles to TollGuru vehicle type
-        const vehicleType = axles >= 7 ? '7AxlesTruck' : 
-                           axles >= 6 ? '6AxlesTruck' :
-                           axles >= 5 ? '5AxlesTruck' :
-                           axles >= 4 ? '4AxlesTruck' :
-                           axles >= 3 ? '3AxlesTruck' : '2AxlesTruck';
+    // ---- HERE Routing ----
+    try {
+      const route = await calculateHereRoute(
+        geocodedPoints,
+        { axles, weightKg, heightM, widthM, lengthM },
+        hereApiKey,
+      );
 
-        const tollGuruBody = {
-          source: 'google',
-          polyline: polyline,
-          vehicle: {
-            type: vehicleType,
-            axles: axles,
-            weight: cargoCapacity ? {
-              value: cargoCapacity,
-              unit: 'ton'
-            } : undefined
-          }
-        };
+      let totalMeters = 0;
+      let totalSeconds = 0;
+      const polylineSegments: string[] = [];
+      let tollIdCounter = 1;
 
-        console.log('TollGuru request body:', JSON.stringify(tollGuruBody, null, 2));
+      for (let i = 0; i < route.sections.length; i++) {
+        const section = route.sections[i];
+        const secMeters = section.summary?.length ?? 0;
+        const secSeconds = section.summary?.duration ?? 0;
+        totalMeters += secMeters;
+        totalSeconds += secSeconds;
 
-        const tollGuruResponse = await fetch('https://apis.tollguru.com/toll/v2/complete-polyline-from-mapping-service', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': tollGuruApiKey,
-          },
-          body: JSON.stringify(tollGuruBody),
+        routeDetails.push({
+          from: geocodedPoints[i]?.address || `Ponto ${i + 1}`,
+          to: geocodedPoints[i + 1]?.address || `Ponto ${i + 2}`,
+          distance: secMeters / 1000,
+          duration: secSeconds / 60,
         });
 
-        if (tollGuruResponse.ok) {
-          const tollGuruData = await tollGuruResponse.json();
-          console.log('TollGuru response status:', tollGuruResponse.status);
-          
-          if (tollGuruData.route && tollGuruData.route.costs) {
-            const costs = tollGuruData.route.costs;
-            estimatedTollCost = costs.tag || costs.cash || costs.licensePlate || 0;
-            tollSource = 'tollguru';
-            
-            console.log('TollGuru toll costs:', costs);
-            
-            if (tollGuruData.route.tolls && Array.isArray(tollGuruData.route.tolls)) {
-              tollDetails = tollGuruData.route.tolls.map((toll: any) => ({
-                id: toll.id,
-                name: toll.name,
-                road: toll.road || '',
-                state: toll.state || '',
-                tagCost: toll.tagCost || 0,
-                cashCost: toll.cashCost || 0,
-                currency: toll.currency || 'BRL',
-              }));
+        if (section.polyline) polylineSegments.push(section.polyline);
+
+        // Tolls: section.tolls is an array of toll structures with `fares` (price + currency)
+        if (Array.isArray(section.tolls)) {
+          for (const t of section.tolls) {
+            const fares = Array.isArray(t.fares) ? t.fares : [];
+            // Prefer "pass" / single-trip fare; pick cheapest non-zero
+            let price = 0;
+            let currency = 'BRL';
+            for (const f of fares) {
+              const p = typeof f.price?.value === 'number' ? f.price.value : 0;
+              if (p > 0 && (price === 0 || p < price)) {
+                price = p;
+                currency = f.price?.currency || currency;
+              }
             }
-          } else {
-            console.log('TollGuru: No tolls found on route or different response structure');
-            console.log('TollGuru full response:', JSON.stringify(tollGuruData, null, 2));
+            if (price > 0) {
+              estimatedTollCost += price;
+              tollDetails.push({
+                id: tollIdCounter++,
+                name: t.name || t.tollSystem?.name || 'Pedágio',
+                road: t.tollSystem?.name || '',
+                state: t.countryCode || '',
+                tagCost: price,
+                cashCost: price,
+                currency,
+              });
+              tollSource = 'here';
+            }
           }
-        } else {
-          const errorText = await tollGuruResponse.text();
-          console.error('TollGuru API error:', tollGuruResponse.status, errorText);
         }
-      } catch (tollError) {
-        console.error('Error calling TollGuru API:', tollError);
       }
+
+      totalDistanceKm = totalMeters / 1000;
+      totalDurationHours = totalSeconds / 3600;
+      // HERE returns one flexible polyline per section. Frontend treats it as opaque
+      // and only ships it back to get-route-map, so concatenate with `;` separator.
+      polyline = polylineSegments.join(';');
+
+      const lats = geocodedPoints.map(p => p.lat);
+      const lngs = geocodedPoints.map(p => p.lng);
+      const bounds = {
+        northeast: { lat: Math.max(...lats), lng: Math.max(...lngs) },
+        southwest: { lat: Math.min(...lats), lng: Math.min(...lngs) },
+      };
+
+      summary = `HERE Truck Routing (${axles} eixos, ${Math.round(weightKg / 1000)}t)`;
+      routeWarnings.push(`✓ Rota oficial para caminhão de ${axles} eixos (restrições legais aplicadas pela HERE)`);
+
+      const result = {
+        success: true,
+        totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
+        totalDurationHours: Math.round(totalDurationHours * 10) / 10,
+        estimatedTollCost: Math.round(estimatedTollCost * 100) / 100,
+        tollSource,
+        tollDetails,
+        routeDetails,
+        polyline,
+        geocodedPoints,
+        bounds,
+        summary,
+        routingEngine,
+        vehicleRestrictions: {
+          axles,
+          warnings: routeWarnings,
+          avoidedRoads: [] as string[],
+        },
+      };
+
+      console.log('HERE route OK:', {
+        km: result.totalDistanceKm, h: result.totalDurationHours,
+        toll: result.estimatedTollCost, tolls: tollDetails.length,
+      });
+
+      return new Response(JSON.stringify(result), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    } catch (hereErr) {
+      console.error('HERE failed, attempting TomTom fallback:', hereErr);
+      routingEngine = 'tomtom';
     }
 
-    if (tollSource === 'estimated') {
-      console.log('TollGuru not available or failed - toll cost will be 0 (only real data is used)');
-      estimatedTollCost = 0;
-      tollSource = 'unavailable';
-    }
+    // ---- TomTom fallback ----
+    if (!tomtomApiKey) throw new Error('HERE failed and no TomTom fallback configured');
 
-    const result = {
+    const locations = geocodedPoints.map(p => `${p.lat},${p.lng}`).join(':');
+    const tomtomUrl = new URL(`https://api.tomtom.com/routing/1/calculateRoute/${locations}/json`);
+    tomtomUrl.searchParams.append('key', tomtomApiKey);
+    tomtomUrl.searchParams.append('traffic', 'true');
+    tomtomUrl.searchParams.append('travelMode', 'truck');
+    tomtomUrl.searchParams.append('vehicleWeight', String(Math.round(weightKg)));
+    tomtomUrl.searchParams.append('vehicleAxleWeight', String(Math.round(weightKg / axles)));
+    tomtomUrl.searchParams.append('vehicleHeight', String(Math.round(heightM * 100)));
+    tomtomUrl.searchParams.append('vehicleWidth', String(Math.round(widthM * 100)));
+    tomtomUrl.searchParams.append('vehicleLength', String(Math.round(lengthM * 100)));
+    tomtomUrl.searchParams.append('routeType', 'fastest');
+    tomtomUrl.searchParams.append('language', 'pt-BR');
+
+    const r = await fetch(tomtomUrl.toString());
+    if (!r.ok) {
+      const t = await r.text();
+      throw new Error(`TomTom error ${r.status}: ${t}`);
+    }
+    const tt = await r.json();
+    const route = tt.routes?.[0];
+    if (!route) throw new Error('TomTom returned no route');
+
+    totalDistanceKm = (route.summary?.lengthInMeters ?? 0) / 1000;
+    totalDurationHours = (route.summary?.travelTimeInSeconds ?? 0) / 3600;
+    const pts: string[] = [];
+    for (const leg of route.legs ?? []) {
+      for (const p of leg.points ?? []) pts.push(`${p.latitude},${p.longitude}`);
+    }
+    polyline = pts.join('|');
+
+    const lats = geocodedPoints.map(p => p.lat);
+    const lngs = geocodedPoints.map(p => p.lng);
+    const bounds = {
+      northeast: { lat: Math.max(...lats), lng: Math.max(...lngs) },
+      southwest: { lat: Math.min(...lats), lng: Math.min(...lngs) },
+    };
+
+    summary = `TomTom Truck Routing (fallback)`;
+    routeWarnings.push('⚠️ Usando fallback TomTom (HERE indisponível). Pedágios não disponíveis.');
+
+    return new Response(JSON.stringify({
       success: true,
       totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
       totalDurationHours: Math.round(totalDurationHours * 10) / 10,
-      estimatedTollCost: Math.round(estimatedTollCost * 100) / 100,
-      tollSource,
-      tollDetails,
+      estimatedTollCost: 0,
+      tollSource: 'unavailable',
+      tollDetails: [],
       routeDetails,
       polyline,
       geocodedPoints,
       bounds,
       summary,
-      routingEngine: totalDistanceKm > 0 && summary.includes('TomTom') ? 'tomtom' : 'google',
-      vehicleRestrictions: {
-        axles,
-        warnings: routeWarnings,
-        avoidedRoads: avoidedRoutes.map(r => r.split(':')[0]),
-      },
-    };
-
-    console.log('Route calculation successful:', {
-      distance: result.totalDistanceKm,
-      duration: result.totalDurationHours,
-      tolls: result.estimatedTollCost,
-      tollSource: result.tollSource,
-      tollCount: tollDetails.length,
-      engine: result.routingEngine,
-    });
-
-    return new Response(JSON.stringify(result), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+      routingEngine: 'tomtom',
+      vehicleRestrictions: { axles, warnings: routeWarnings, avoidedRoads: [] },
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-    console.error('Error in calculate-route function:', errorMessage);
-    return new Response(JSON.stringify({ 
-      success: false, 
-      error: errorMessage
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('calculate-route error:', msg);
+    return new Response(JSON.stringify({ success: false, error: msg }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });

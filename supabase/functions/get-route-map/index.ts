@@ -6,12 +6,8 @@ const corsHeaders = {
 };
 
 interface MapRequest {
-  polyline: string;
-  geocodedPoints: Array<{
-    address: string;
-    lat: number;
-    lng: number;
-  }>;
+  polyline: string; // HERE flexible polyline (may be ; -separated segments)
+  geocodedPoints: Array<{ address: string; lat: number; lng: number }>;
 }
 
 serve(async (req) => {
@@ -20,64 +16,65 @@ serve(async (req) => {
   }
 
   try {
-    const googleApiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
-    if (!googleApiKey) {
-      return new Response(JSON.stringify({ success: false, error: 'API key not configured' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    const hereApiKey = Deno.env.get('HERE_API_KEY');
+    if (!hereApiKey) {
+      return new Response(JSON.stringify({ success: false, error: 'HERE_API_KEY not configured' }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
     const { polyline, geocodedPoints } = await req.json() as MapRequest;
-
     if (!geocodedPoints || geocodedPoints.length < 2) {
       return new Response(JSON.stringify({ success: false, error: 'Insufficient points' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    // Build markers
-    const markers = geocodedPoints.map((point, index) => {
-      const label = index === 0 ? 'A' : index === geocodedPoints.length - 1 ? 'B' : '';
-      const color = index === 0 ? 'green' : index === geocodedPoints.length - 1 ? 'red' : 'blue';
-      return `markers=color:${color}|label:${label}|${point.lat},${point.lng}`;
-    }).join('&');
+    // HERE Map Image API v3 — overlay endpoint accepts polyline + markers
+    // Docs: https://developer.here.com/documentation/map-image/dev_guide/topics_v3/overlay.html
+    const url = new URL('https://image.maps.hereapi.com/mia/v3/base/mc/overlay');
+    url.searchParams.set('apiKey', hereApiKey);
+    url.searchParams.set('w', '600');
+    url.searchParams.set('h', '300');
+    url.searchParams.set('style', 'explore.day');
 
-    // Build path from polyline
-    const pathParam = polyline 
-      ? `path=enc:${encodeURIComponent(polyline)}|color:0x4285F4ff|weight:4`
-      : '';
+    // Polyline (HERE flexible polyline) — handle concatenated sections
+    if (polyline) {
+      const segments = polyline.split(';').filter(Boolean);
+      for (const seg of segments) {
+        url.searchParams.append('polyline', `${seg};fc=2563eb;sc=ffffff;lw=5`);
+      }
+    }
 
-    const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?size=600x300&maptype=roadmap&${markers}&${pathParam}&key=${googleApiKey}`;
+    // Markers: green start, red end, blue intermediates
+    geocodedPoints.forEach((p, i) => {
+      const color = i === 0 ? '00aa00' : i === geocodedPoints.length - 1 ? 'd22d2d' : '2563eb';
+      url.searchParams.append('marker', `${p.lat},${p.lng};fc=${color};sc=ffffff`);
+    });
 
-    // Fetch the image
-    const mapResponse = await fetch(mapUrl);
-    
-    if (!mapResponse.ok) {
-      console.error('Google Maps API error:', mapResponse.status);
-      return new Response(JSON.stringify({ success: false, error: 'Failed to generate map' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    const r = await fetch(url.toString());
+    if (!r.ok) {
+      const text = await r.text();
+      console.error('HERE Map Image error:', r.status, text);
+      return new Response(JSON.stringify({ success: false, error: `HERE map error ${r.status}` }), {
+        status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
-    const imageBuffer = await mapResponse.arrayBuffer();
-    
-    return new Response(imageBuffer, {
+    const buf = await r.arrayBuffer();
+    return new Response(buf, {
       headers: {
         ...corsHeaders,
-        'Content-Type': 'image/png',
+        'Content-Type': r.headers.get('Content-Type') || 'image/png',
         'Cache-Control': 'public, max-age=3600',
-      }
+      },
     });
 
   } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error('Error in get-route-map:', errorMessage);
-    return new Response(JSON.stringify({ success: false, error: errorMessage }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    console.error('get-route-map error:', msg);
+    return new Response(JSON.stringify({ success: false, error: msg }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
   }
 });

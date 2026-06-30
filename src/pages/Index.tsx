@@ -144,7 +144,7 @@ interface SimulationResult {
   originCity?: string;
   destinationCity?: string;
   vehicleRestrictions?: VehicleRestrictions;
-  routingEngine?: 'tomtom' | 'google';
+  routingEngine?: 'here' | 'tomtom' | 'google';
   costBreakdown?: {
     dailyCosts: {
       insurance: number;
