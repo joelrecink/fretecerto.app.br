@@ -7,6 +7,8 @@ interface RoutePoint {
   address: string;
   value: number;
   weight?: number;
+  lat?: number;
+  lng?: number;
 }
 
 interface RouteCalculationResult {
@@ -20,6 +22,7 @@ interface RouteCalculationResult {
     duration: number;
   }>;
   polyline?: string;
+  routeCoordinates?: [number, number][];
   geocodedPoints?: Array<{
     address: string;
     lat: number;
