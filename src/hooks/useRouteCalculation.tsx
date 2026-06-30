@@ -35,7 +35,7 @@ interface RouteCalculationResult {
     warnings: string[];
     avoidedRoads: string[];
   };
-  routingEngine?: 'tomtom' | 'google';
+  routingEngine?: 'here' | 'tomtom' | 'google';
 }
 
 interface UseRouteCalculationReturn {
