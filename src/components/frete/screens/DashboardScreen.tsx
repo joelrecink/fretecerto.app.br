@@ -131,46 +131,6 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset, onRe
 
   const colors = viabilityColors[result.viabilityScore];
 
-  // Fetch map image from edge function
-  useEffect(() => {
-    const fetchMapImage = async () => {
-      if (!result.geocodedPoints || result.geocodedPoints.length < 2) return;
-      
-      setMapLoading(true);
-      try {
-        const { data, error } = await supabase.functions.invoke('get-route-map', {
-          body: {
-            polyline: result.polyline,
-            geocodedPoints: result.geocodedPoints,
-          },
-        });
-
-        if (error) {
-          console.error('Error fetching map:', error);
-          return;
-        }
-
-        // Convert blob to URL
-        if (data instanceof Blob) {
-          const url = URL.createObjectURL(data);
-          setMapImageUrl(url);
-        }
-      } catch (err) {
-        console.error('Failed to fetch map:', err);
-      } finally {
-        setMapLoading(false);
-      }
-    };
-
-    fetchMapImage();
-
-    // Cleanup URL on unmount
-    return () => {
-      if (mapImageUrl) {
-        URL.revokeObjectURL(mapImageUrl);
-      }
-    };
-  }, [result.geocodedPoints, result.polyline]);
 
   // Build WhatsApp share message
   const handleShareWhatsApp = () => {
