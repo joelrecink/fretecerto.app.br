@@ -353,8 +353,12 @@ serve(async (req) => {
     totalDistanceKm = (route.summary?.lengthInMeters ?? 0) / 1000;
     totalDurationHours = (route.summary?.travelTimeInSeconds ?? 0) / 3600;
     const pts: string[] = [];
+    const ttCoords: [number, number][] = [];
     for (const leg of route.legs ?? []) {
-      for (const p of leg.points ?? []) pts.push(`${p.latitude},${p.longitude}`);
+      for (const p of leg.points ?? []) {
+        pts.push(`${p.latitude},${p.longitude}`);
+        ttCoords.push([p.latitude, p.longitude]);
+      }
     }
     polyline = pts.join('|');
 
@@ -377,6 +381,7 @@ serve(async (req) => {
       tollDetails: [],
       routeDetails,
       polyline,
+      routeCoordinates: ttCoords,
       geocodedPoints,
       bounds,
       summary,
