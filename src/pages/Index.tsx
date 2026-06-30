@@ -496,6 +496,7 @@ const Index = () => {
         routeSuggestions: aiAnalysis?.summary || (routeCalcResult.summary ? `Rota via ${routeCalcResult.summary}` : undefined),
         aiAnalysis,
         polyline: routeCalcResult.polyline,
+        routeCoordinates: routeCalcResult.routeCoordinates,
         geocodedPoints: routeCalcResult.geocodedPoints,
         originCity,
         destinationCity,
