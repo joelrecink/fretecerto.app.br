@@ -30,26 +30,33 @@ serve(async (req) => {
       });
     }
 
-    // HERE Map Image API v3 — overlay endpoint accepts polyline + markers
-    // Docs: https://developer.here.com/documentation/map-image/dev_guide/topics_v3/overlay.html
-    const url = new URL('https://image.maps.hereapi.com/mia/v3/base/mc/overlay');
+    // HERE Map Image API v3
+    // Docs: https://www.here.com/docs/bundle/map-image-api-developer-guide-v3/page/topics/overview.html
+    // Format: https://image.maps.hereapi.com/mia/v3/base/mc/{bbox|center}/{w}x{h}/{fmt}
+    const lats = geocodedPoints.map(p => p.lat);
+    const lngs = geocodedPoints.map(p => p.lng);
+    const minLat = Math.min(...lats), maxLat = Math.max(...lats);
+    const minLng = Math.min(...lngs), maxLng = Math.max(...lngs);
+    const padLat = Math.max((maxLat - minLat) * 0.15, 0.05);
+    const padLng = Math.max((maxLng - minLng) * 0.15, 0.05);
+    const bbox = `bbox:${minLng - padLng},${minLat - padLat},${maxLng + padLng},${maxLat + padLat}`;
+
+    const url = new URL(`https://image.maps.hereapi.com/mia/v3/base/mc/${bbox}/600x300/png`);
     url.searchParams.set('apiKey', hereApiKey);
-    url.searchParams.set('w', '600');
-    url.searchParams.set('h', '300');
     url.searchParams.set('style', 'explore.day');
 
-    // Polyline (HERE flexible polyline) — handle concatenated sections
+    // Route polylines (flexible polyline) — handle concatenated sections
     if (polyline) {
       const segments = polyline.split(';').filter(Boolean);
-      for (const seg of segments) {
-        url.searchParams.append('polyline', `${seg};fc=2563eb;sc=ffffff;lw=5`);
-      }
+      segments.forEach((seg, idx) => {
+        url.searchParams.append(`route${idx}`, `${seg};sc=2563eb;sd=ffffff;sw=5`);
+      });
     }
 
-    // Markers: green start, red end, blue intermediates
+    // POIs: green start, red end, blue intermediates
     geocodedPoints.forEach((p, i) => {
       const color = i === 0 ? '00aa00' : i === geocodedPoints.length - 1 ? 'd22d2d' : '2563eb';
-      url.searchParams.append('marker', `${p.lat},${p.lng};fc=${color};sc=ffffff`);
+      url.searchParams.append(`pois${i}`, `${p.lat},${p.lng};fc=${color};sc=ffffff`);
     });
 
     const r = await fetch(url.toString());
