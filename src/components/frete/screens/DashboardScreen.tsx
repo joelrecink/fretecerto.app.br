@@ -215,35 +215,14 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
           </div>
         )}
 
-        {/* Route Map */}
-        {(mapImageUrl || mapLoading) && (
-          <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] overflow-hidden">
-            <div className="flex items-center gap-2 p-4 border-b border-[hsl(var(--border))]">
-              <Map size={18} className="text-blue-600" />
-              <span className="font-bold text-[hsl(var(--foreground))]">Rota no Mapa</span>
-            </div>
-            <div className="relative">
-              {mapLoading ? (
-                <div className="w-full h-48 bg-slate-100 flex items-center justify-center">
-                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : mapImageUrl ? (
-                <img 
-                  src={mapImageUrl} 
-                  alt="Mapa da rota" 
-                  className="w-full h-48 object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              ) : null}
-              {result.geocodedPoints && result.geocodedPoints.length >= 2 && (
-                <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-sm font-medium">
-                  {result.geocodedPoints[0]?.address?.split(',')[0]} → {result.geocodedPoints[result.geocodedPoints.length - 1]?.address?.split(',')[0]}
-                </div>
-              )}
-            </div>
-          </div>
+        {/* Interactive Route Map (Leaflet + HERE) */}
+        {result.geocodedPoints && result.geocodedPoints.length >= 2 && (
+          <RouteMap
+            coordinates={result.routeCoordinates || []}
+            points={result.geocodedPoints.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }))}
+            onPointsChange={onRecalculateRoute}
+            loading={recalculating}
+          />
         )}
 
         {/* Key Metrics */}
