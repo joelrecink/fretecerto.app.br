@@ -217,6 +217,7 @@ serve(async (req) => {
       let totalMeters = 0;
       let totalSeconds = 0;
       const polylineSegments: string[] = [];
+      const routeCoordinates: [number, number][] = [];
       let tollIdCounter = 1;
 
       for (let i = 0; i < route.sections.length; i++) {
@@ -233,13 +234,23 @@ serve(async (req) => {
           duration: secSeconds / 60,
         });
 
-        if (section.polyline) polylineSegments.push(section.polyline);
+        if (section.polyline) {
+          polylineSegments.push(section.polyline);
+          const decoded = decodeHerePolyline(section.polyline);
+          // Avoid duplicating join points between sections
+          for (let k = 0; k < decoded.length; k++) {
+            if (k === 0 && routeCoordinates.length > 0) {
+              const last = routeCoordinates[routeCoordinates.length - 1];
+              if (last[0] === decoded[k][0] && last[1] === decoded[k][1]) continue;
+            }
+            routeCoordinates.push(decoded[k]);
+          }
+        }
 
         // Tolls: section.tolls is an array of toll structures with `fares` (price + currency)
         if (Array.isArray(section.tolls)) {
           for (const t of section.tolls) {
             const fares = Array.isArray(t.fares) ? t.fares : [];
-            // Prefer "pass" / single-trip fare; pick cheapest non-zero
             let price = 0;
             let currency = 'BRL';
             for (const f of fares) {
@@ -268,8 +279,6 @@ serve(async (req) => {
 
       totalDistanceKm = totalMeters / 1000;
       totalDurationHours = totalSeconds / 3600;
-      // HERE returns one flexible polyline per section. Frontend treats it as opaque
-      // and only ships it back to get-route-map, so concatenate with `;` separator.
       polyline = polylineSegments.join(';');
 
       const lats = geocodedPoints.map(p => p.lat);
@@ -291,6 +300,7 @@ serve(async (req) => {
         tollDetails,
         routeDetails,
         polyline,
+        routeCoordinates,
         geocodedPoints,
         bounds,
         summary,
