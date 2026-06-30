@@ -1,83 +1,70 @@
-## Objetivo
+# Migrar para HERE Maps como provedor principal
 
-Corrigir o motor de cálculo do FreteCerto consolidando três frentes:
-1. Bug de dupla contagem de combustível no detalhamento salvo.
-2. Inconsistências de proporcionalidade (mensal/diário, encargos, dias, ARDA, consumo vazio).
-3. Permitir editar a distância de deslocamento no retorno vazio.
+Substituir Google Maps + TollGuru pela **HERE Routing v8 API**, que já entrega rota, restrições de caminhão, pedágios e mapa estático numa única chamada. Manter TomTom como fallback e remover dependências legadas após validação.
 
-Sem mexer em edge functions, domínio, SSL ou publicação.
+## Pré-requisito
 
-## Alterações
+Usuário cria conta gratuita em https://platform.here.com (1.000 transações/dia grátis) e gera uma **API Key REST**. Será solicitada via `add_secret` como `HERE_API_KEY`.
 
-### A. `src/pages/Index.tsx` — função `handleCalculate`
+## Arquitetura proposta
 
-1. **Corrigir dupla contagem de combustível**
-   - Calcular `maintenanceVariableOnly = (totalPerKmCost − fuelPerKm) × distance`.
-   - Em `tripHistory` salvar `estimated_maintenance_cost = maintenanceVariableOnly` e manter `estimated_fuel_cost` separado.
-   - `totalCost` continua o mesmo (sempre usou `maintenanceCostForTrip` só uma vez).
+```text
+Antes:  calculate-route → Google Directions → TomTom (3+ eixos) → TollGuru (pedágios)
+        get-route-map   → Google Static Maps
 
-2. **Padronizar mensal → dia**
-   - Trocar `/30` por `/30.44` em `dailyParking`, `dailyTracking`, `dailyAccounting`, `dailyOtherFixed`.
+Depois: calculate-route → HERE Routing v8 (rota + restrições + pedágios numa chamada)
+                       → TomTom (fallback se HERE falhar)
+        get-route-map   → HERE Map Image API v3
+```
 
-3. **Encargos sobre a folha (opcional)**
-   - Aplicar `dailySalary × (1 + payrollChargesPercentage/100)`.
-   - Default 0 → comportamento atual preservado.
+## Mudanças
 
-4. **Horas de espera do ARDA configurável**
-   - Usar `vehicle.estimatedWaitHoursPerDay ?? 2` em vez da constante `2`.
+### 1. Edge function `calculate-route/index.ts` (refatorar)
+- Substituir bloco Google Directions pelo endpoint HERE:
+  `https://router.hereapi.com/v8/routes`
+- Parâmetros de caminhão nativos: `transportMode=truck`, `vehicle[grossWeight]`, `vehicle[axleCount]`, `vehicle[height/width/length]`, `vehicle[hazardousGoods]`.
+- Solicitar `return=polyline,summary,tolls,actions,instructions` e `spans=tollSystems,countryCode`.
+- Remover chamada ao TollGuru — pedágio vem em `notices[]` / `tolls[]` da própria HERE com valor em centavos por moeda.
+- Remover lista hardcoded de "rodovias proibidas" (Serra do Rio do Rastro etc.) — HERE já aplica restrições oficiais por peso/altura/eixos.
+- Manter TomTom como fallback se HERE retornar erro ou cobertura incompleta.
+- Resposta mantém o mesmo contrato atual (`totalDistanceKm`, `totalDurationHours`, `estimatedTollCost`, `polyline`, `geocodedPoints`, `bounds`, `routingEngine: 'here' | 'tomtom'`).
 
-5. **Dias com repouso semanal (Lei do Motorista)**
-   - `effectiveDays = ceil(durationHours / drivingHoursPerDay)`
-   - `weeklyRestDays = floor(effectiveDays / 6)`
-   - `days = effectiveDays + weeklyRestDays`
-   - Para viagens ≤6 dias o resultado é igual ao atual.
+### 2. Edge function `get-route-map/index.ts` (refatorar)
+- Trocar Google Static Maps por **HERE Map Image API v3**:
+  `https://image.maps.hereapi.com/mia/v3/base/mc/overlay`
+- Aceita polyline + markers no mesmo formato; retorna PNG.
+- Sem restrição de referer no server-side (resolve o 403 atual).
 
-### B. `src/types.ts` e tipagem local em `Index.tsx`
+### 3. Frontend
+- `useRouteCalculation.tsx`: ajustar tipo `routingEngine` para incluir `'here'`.
+- `DashboardScreen.tsx`: exibir "Rota via HERE Maps" no rodapé do mapa.
+- Nenhuma mudança em formulários ou fluxo de telas.
 
-Adicionar campos opcionais em `Vehicle`:
-- `payrollChargesPercentage?: number` (default 0)
-- `estimatedWaitHoursPerDay?: number` (default 2)
+### 4. Admin Dashboard (`Admin.tsx`)
+- Atualizar cálculo de custos de API:
+  - Remover linha "Google Maps" e "TollGuru".
+  - Adicionar "HERE Maps" com custo por transação (a definir, ex: US$ 0,80/1k após free tier).
+- Mantém Gemini AI e TomTom.
 
-### C. Migration no banco
+### 5. Secrets
+- Adicionar: `HERE_API_KEY` (via `add_secret`).
+- Manter: `TOMTOM_API_KEY` (fallback), `GOOGLE_MAPS_API_KEY` (geocoding em formulários, se ainda usado), `LOVABLE_API_KEY` (Gemini).
+- Após validação em produção: remover `TOLLGURU_API_KEY` e `GOOGLE_MAPS_API_KEY` se nenhum outro consumidor.
 
-Adicionar colunas na tabela `vehicles`:
-- `payroll_charges_percentage numeric default 0`
-- `estimated_wait_hours_per_day numeric default 2`
+## Plano de validação
 
-Atualizar leitura/escrita em `Index.tsx` (mapeamento `v → vehicle` e `vehicle → upsert`).
+1. Implementar as duas edge functions com HERE.
+2. Rodar rota-piloto **Criciúma → São Paulo (9 eixos, 49t)** — comparar com último cálculo (888 km, 11,4h, pedágio R$ 0).
+3. Validar mais 2 rotas reais (uma com restrição conhecida, uma rota curta urbana).
+4. Se distância/tempo/pedágio coerentes: ativar HERE como default e remover código Google+TollGuru.
+5. Se cobertura de pedágio falhar em alguma rota: manter TollGuru opcional como segundo provedor só para pedágio.
 
-### D. `src/components/frete/screens/CostsMaintenanceScreen.tsx`
+## Riscos e mitigações
 
-Acrescentar:
-- Input "% Encargos sobre a folha" (perto de "Incluir 13º").
-- Input "Horas de espera por dia (carga/descarga)" (perto do toggle ARDA).
+- **Cobertura de pedágio BR**: HERE tem boa cobertura, mas se faltar alguma praça, fallback automático para TollGuru pode ser reintroduzido em 1 dia.
+- **Limite gratuito**: 1k req/dia cobre uso atual; monitorar via Admin Dashboard.
+- **Quebra de contrato**: edge function mantém o mesmo JSON de saída, sem mudanças no frontend além do label do engine.
 
-### E. `src/components/frete/screens/TripSummaryScreen.tsx` — retorno vazio editável
+## Próximo passo
 
-1. Novo estado `returnDistance: number`, inicializado com `estimatedDistance` quando o toggle vira ativo.
-2. Substituir uso de `estimatedDistance` no cálculo de retorno por `returnDistance`.
-3. Aplicar fator de consumo vazio: usar `consumoEfetivo = fuelConsumption / 0.75` (caminhão vazio rende ~33% mais).
-   - `fuelCost = (returnDistance / consumoEfetivo) × fuelPrice`
-   - `maintenanceCost = returnDistance × 0.20`
-4. Nova UI dentro do bloco do toggle (quando ativo):
-   - Campo numérico "Distância de retorno (km)" com `inputMode="decimal"`.
-   - Botão pequeno "Usar distância da ida" que reseta para `estimatedDistance`.
-   - Mostra custo estimado em R$ atualizando em tempo real.
-5. `onCalculate(includeReturn, estimatedReturnCost)` mantém a mesma assinatura.
-
-### F. Sem alterações
-
-- Edge functions (`calculate-route`, `analyze-route-ai`, `stripe-webhook`, etc.).
-- Cliente do backend (`integrations/supabase/client.ts`).
-- Configuração de domínio / SSL / publicação.
-
-## Validação
-
-1. **Viagem curta (1 dia, 500 km)**: `totalCost` igual ao atual ±0,5%.
-2. **Viagem 5 dias, 2.500 km**: fixos mensais caem ~1,5% (efeito do `/30.44`).
-3. **Viagem 10 dias, 5.000 km**: adiciona 1 dia de repouso semanal, refletido no `fixedCostForTrip`.
-4. **Soma do detalhamento salvo** (`fuel + tolls + commission + maintenance + fixed + arda + retorno`) bate com `totalCost` (sem duplicar combustível).
-5. **Pizza do Dashboard**: combustível aparece em fatia única, manutenção variável sem somar combustível.
-6. **Retorno vazio**: alterar a distância de retorno reduz proporcionalmente o custo de retorno e o `totalCost`.
-7. **ARDA**: alterar horas de espera por dia muda o `ardaCost` proporcionalmente.
-8. **Encargos**: definir 40% aumenta `dailySalary` em 40%.
+Aprove o plano e me forneça a `HERE_API_KEY` (vou abrir o formulário seguro de secret após sua aprovação).
