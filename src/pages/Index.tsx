@@ -69,6 +69,9 @@ interface VehicleData {
   // ARDA
   ardaEnabled?: boolean;
   ardaPercentage?: number;
+  estimatedWaitHoursPerDay?: number;
+  // Encargos trabalhistas sobre a folha (%)
+  payrollChargesPercentage?: number;
   // Dimensões do veículo (TomTom)
   vehicleWeight?: number;
   vehicleHeight?: number;
@@ -228,6 +231,8 @@ const Index = () => {
       annualDepreciationRate: v.annual_depreciation_rate || undefined,
       insuranceYearly: v.insurance_yearly || undefined,
       registrationYearly: v.registration_yearly || undefined,
+      payrollChargesPercentage: (v as any).payroll_charges_percentage ?? undefined,
+      estimatedWaitHoursPerDay: (v as any).estimated_wait_hours_per_day ?? undefined,
       currentOdometer: v.current_odometer || undefined,
       // Tire References
       refTirePriceNew: v.ref_tire_price_new || undefined,
