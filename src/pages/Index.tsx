@@ -856,7 +856,7 @@ const Index = () => {
         />
       )}
       {step === 'dashboard' && result && (
-        <DashboardScreen result={result} onReset={handleReset} />
+        <DashboardScreen result={result} onReset={handleReset} onRecalculateRoute={handleRecalculateRoute} recalculating={recalculating} />
       )}
     </div>
   );
