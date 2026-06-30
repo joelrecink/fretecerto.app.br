@@ -140,6 +140,7 @@ interface SimulationResult {
   routeSuggestions?: string;
   aiAnalysis?: AIAnalysis;
   polyline?: string;
+  routeCoordinates?: [number, number][];
   geocodedPoints?: GeocodedPoint[];
   originCity?: string;
   destinationCity?: string;
