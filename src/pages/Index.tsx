@@ -309,9 +309,10 @@ const Index = () => {
 
   const handleCalculate = async (includeReturn: boolean = false, returnCost: number = 0) => {
     setCalculating(true);
+    setLastCalcParams({ includeReturn, returnCost });
 
     try {
-      // Call TomTom/Google Maps API + TollGuru via edge function
+      // Call HERE/TomTom via edge function
       const routeCalcResult = await calculateRoute(pickups, deliveries, vehicle.axles, vehicle.cargoCapacity);
       
       if (!routeCalcResult) {
