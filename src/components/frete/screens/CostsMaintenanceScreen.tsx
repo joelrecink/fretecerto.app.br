@@ -742,6 +742,26 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
             </div>
             <span className="text-sm">Incluir proporcional de 13º e férias</span>
           </button>
+
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">
+              Encargos sobre a folha (%)
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={data.payrollChargesPercentage ?? ''}
+                onChange={(e) => handleInputChange('payrollChargesPercentage', e.target.value)}
+                placeholder="0"
+                className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">%</span>
+            </div>
+            <p className="text-xs text-[hsl(var(--muted-foreground))]">
+              FGTS (8%), INSS patronal, provisão rescisória, etc. CLT típico: 35–45%. Autônomo: 0%.
+            </p>
+          </div>
         </div>
 
         {/* Seguro & Licenciamento */}
@@ -909,20 +929,38 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
           </button>
 
           {data.ardaEnabled && (
-            <div className="space-y-2">
-              <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Percentual ARDA (%)</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.ardaPercentage || 30}
-                  onChange={(e) => handleInputChange('ardaPercentage', e.target.value)}
-                  placeholder="30"
-                  className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">%</span>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Percentual ARDA (%)</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={data.ardaPercentage || 30}
+                    onChange={(e) => handleInputChange('ardaPercentage', e.target.value)}
+                    placeholder="30"
+                    className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">%</span>
+                </div>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">Padrão: 30% sobre horas extras</p>
               </div>
-              <p className="text-xs text-[hsl(var(--muted-foreground))]">Padrão: 30% sobre horas extras de espera</p>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Horas de espera / dia</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={data.estimatedWaitHoursPerDay ?? 2}
+                    onChange={(e) => handleInputChange('estimatedWaitHoursPerDay', e.target.value)}
+                    placeholder="2"
+                    className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">h</span>
+                </div>
+                <p className="text-xs text-[hsl(var(--muted-foreground))]">Estimativa carga/descarga</p>
+              </div>
             </div>
           )}
         </div>
