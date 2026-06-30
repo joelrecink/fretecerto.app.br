@@ -890,9 +890,9 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
             <p className="text-2xl font-bold text-blue-700">
               R$ {(
                 ((data.insuranceYearly || 0) + (data.registrationYearly || 0)) / 365 +
-                ((data.driverSalaryMonthly || 0) * (data.driverSalaryInclude13th ? 13.33 : 12)) / 365 +
+                (((data.driverSalaryMonthly || 0) * (data.driverSalaryInclude13th ? 13.33 : 12)) / 365) * (1 + ((data.payrollChargesPercentage || 0) / 100)) +
                 ((data.assetValue || 0) * ((data.annualDepreciationRate || 0) / 100)) / 365 +
-                ((data.parkingMonthly || 0) + (data.trackingMonthly || 0) + (data.accountingMonthly || 0) + (data.otherFixedMonthly || 0)) / 30
+                ((data.parkingMonthly || 0) + (data.trackingMonthly || 0) + (data.accountingMonthly || 0) + (data.otherFixedMonthly || 0)) / 30.44
               ).toFixed(2)}
             </p>
           </div>
