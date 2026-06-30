@@ -100,12 +100,11 @@ interface SimulationResult {
 interface DashboardScreenProps {
   result: SimulationResult;
   onReset: () => void;
+  onRecalculateRoute?: (editedPoints: ExportPoint[]) => Promise<void> | void;
+  recalculating?: boolean;
 }
 
-const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset }) => {
-  const [mapImageUrl, setMapImageUrl] = useState<string | null>(null);
-  const [mapLoading, setMapLoading] = useState(false);
-
+const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset, onRecalculateRoute, recalculating }) => {
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
