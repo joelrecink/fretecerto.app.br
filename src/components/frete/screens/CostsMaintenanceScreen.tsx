@@ -13,6 +13,7 @@ interface CostsData {
   registrationYearly?: number;
   driverSalaryMonthly?: number;
   driverSalaryInclude13th?: boolean;
+  payrollChargesPercentage?: number;
   maintenanceCostPerKm?: number;
   
   // Custos Fixos Adicionais (mensais)
@@ -29,6 +30,7 @@ interface CostsData {
   // ARDA - Lei 13.103/2015
   ardaEnabled?: boolean;
   ardaPercentage?: number;
+  estimatedWaitHoursPerDay?: number;
   
   // Dimensões do veículo (TomTom)
   vehicleWeight?: number;
