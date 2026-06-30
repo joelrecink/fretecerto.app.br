@@ -203,6 +203,8 @@ const Index = () => {
   const [deliveries, setDeliveries] = useState<RoutePoint[]>([{ id: '1', address: '', value: 0 }]);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [calculating, setCalculating] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
+  const [lastCalcParams, setLastCalcParams] = useState<{ includeReturn: boolean; returnCost: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [estimatedDistance, setEstimatedDistance] = useState<number | undefined>(undefined);
 
