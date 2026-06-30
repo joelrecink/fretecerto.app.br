@@ -7,6 +7,8 @@ interface RoutePoint {
   address: string;
   value: number;
   weight?: number;
+  lat?: number;
+  lng?: number;
 }
 
 interface RouteCalculationResult {
@@ -20,6 +22,7 @@ interface RouteCalculationResult {
     duration: number;
   }>;
   polyline?: string;
+  routeCoordinates?: [number, number][];
   geocodedPoints?: Array<{
     address: string;
     lat: number;
@@ -82,8 +85,16 @@ export const useRouteCalculation = (): UseRouteCalculationReturn => {
 
       const { data, error: fnError } = await supabase.functions.invoke('calculate-route', {
         body: {
-          origins: validPickups.map(p => ({ address: p.address })),
-          destinations: validDeliveries.map(d => ({ address: d.address })),
+          origins: validPickups.map(p =>
+            p.lat != null && p.lng != null
+              ? { address: p.address, lat: p.lat, lng: p.lng }
+              : { address: p.address },
+          ),
+          destinations: validDeliveries.map(d =>
+            d.lat != null && d.lng != null
+              ? { address: d.address, lat: d.lat, lng: d.lng }
+              : { address: d.address },
+          ),
           axles,
           cargoCapacity,
         },
@@ -105,6 +116,7 @@ export const useRouteCalculation = (): UseRouteCalculationReturn => {
         estimatedTollCost: data.estimatedTollCost,
         routeDetails: data.routeDetails,
         polyline: data.polyline,
+        routeCoordinates: data.routeCoordinates,
         geocodedPoints: data.geocodedPoints,
         bounds: data.bounds,
         summary: data.summary,

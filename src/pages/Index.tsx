@@ -140,6 +140,7 @@ interface SimulationResult {
   routeSuggestions?: string;
   aiAnalysis?: AIAnalysis;
   polyline?: string;
+  routeCoordinates?: [number, number][];
   geocodedPoints?: GeocodedPoint[];
   originCity?: string;
   destinationCity?: string;
@@ -202,6 +203,8 @@ const Index = () => {
   const [deliveries, setDeliveries] = useState<RoutePoint[]>([{ id: '1', address: '', value: 0 }]);
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [calculating, setCalculating] = useState(false);
+  const [recalculating, setRecalculating] = useState(false);
+  const [lastCalcParams, setLastCalcParams] = useState<{ includeReturn: boolean; returnCost: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [estimatedDistance, setEstimatedDistance] = useState<number | undefined>(undefined);
 
@@ -306,9 +309,10 @@ const Index = () => {
 
   const handleCalculate = async (includeReturn: boolean = false, returnCost: number = 0) => {
     setCalculating(true);
+    setLastCalcParams({ includeReturn, returnCost });
 
     try {
-      // Call TomTom/Google Maps API + TollGuru via edge function
+      // Call HERE/TomTom via edge function
       const routeCalcResult = await calculateRoute(pickups, deliveries, vehicle.axles, vehicle.cargoCapacity);
       
       if (!routeCalcResult) {
@@ -492,6 +496,7 @@ const Index = () => {
         routeSuggestions: aiAnalysis?.summary || (routeCalcResult.summary ? `Rota via ${routeCalcResult.summary}` : undefined),
         aiAnalysis,
         polyline: routeCalcResult.polyline,
+        routeCoordinates: routeCalcResult.routeCoordinates,
         geocodedPoints: routeCalcResult.geocodedPoints,
         originCity,
         destinationCity,
@@ -528,6 +533,72 @@ const Index = () => {
       toast.error('Erro ao calcular rota');
     } finally {
       setCalculating(false);
+    }
+  };
+
+  // Recalcula rota + custos quando o usuário edita coordenadas no mapa.
+  // Mantém análise IA atual (não consome créditos novamente).
+  const handleRecalculateRoute = async (editedPoints: Array<{ address: string; lat: number; lng: number }>) => {
+    if (!result) return;
+    setRecalculating(true);
+    try {
+      const newPickups = pickups.map((p, i) => ({ ...p, address: editedPoints[i]?.address ?? p.address, lat: editedPoints[i]?.lat, lng: editedPoints[i]?.lng }));
+      const newDeliveries = deliveries.map((d, i) => {
+        const ep = editedPoints[pickups.length + i];
+        return { ...d, address: ep?.address ?? d.address, lat: ep?.lat, lng: ep?.lng };
+      });
+      const r = await calculateRoute(newPickups, newDeliveries, vehicle.axles, vehicle.cargoCapacity);
+      if (!r) return;
+
+      const distance = r.totalDistanceKm;
+      const durationHours = r.totalDurationHours;
+      const effectiveDays = Math.ceil(durationHours / vehicle.drivingHoursPerDay);
+      const days = effectiveDays + Math.floor(effectiveDays / 6);
+      const fuelPerKm = vehicle.fuelPrice / vehicle.fuelConsumption;
+      const fuelCost = fuelPerKm * distance;
+      const prev = result;
+      const perKmTotal = prev.costBreakdown?.perKmCosts.total ?? fuelPerKm;
+      const dailyTotal = prev.costBreakdown?.dailyCosts.total ?? 0;
+      const maintenanceCostForTrip = perKmTotal * distance;
+      const maintenanceVariableOnly = maintenanceCostForTrip - fuelCost;
+      const fixedCostForTrip = dailyTotal * days;
+      const tollCost = r.estimatedTollCost;
+      const commission = prev.totalFreightIncome * (vehicle.driverCommissionPercentage / 100);
+      const ardaCost = prev.estimatedArdaCost || 0;
+      const includeReturn = lastCalcParams?.includeReturn ?? false;
+      const baseReturnPerKm = (lastCalcParams?.returnCost && prev.totalDistanceKm)
+        ? (lastCalcParams.returnCost / prev.totalDistanceKm) : 0;
+      const newReturnCost = includeReturn ? baseReturnPerKm * distance : 0;
+      const totalCost = fixedCostForTrip + maintenanceCostForTrip + tollCost + commission + ardaCost + newReturnCost;
+      const netProfit = prev.totalFreightIncome - totalCost;
+
+      setResult({
+        ...prev,
+        totalDistanceKm: distance,
+        totalDurationHours: durationHours,
+        totalDurationDays: days,
+        estimatedFuelCost: fuelCost,
+        estimatedTollCost: tollCost,
+        driverCommissionCost: commission,
+        estimatedMaintenanceCost: maintenanceVariableOnly,
+        estimatedFixedCost: fixedCostForTrip,
+        returnCost: includeReturn ? newReturnCost : undefined,
+        netProfit,
+        polyline: r.polyline,
+        routeCoordinates: r.routeCoordinates,
+        geocodedPoints: r.geocodedPoints,
+        routingEngine: r.routingEngine,
+        costBreakdown: prev.costBreakdown ? {
+          ...prev.costBreakdown,
+          tripCosts: { tolls: tollCost, commission, arda: ardaCost },
+        } : undefined,
+      });
+      toast.success('Rota e custos recalculados');
+    } catch (e) {
+      console.error('Recalculate error:', e);
+      toast.error('Erro ao recalcular rota');
+    } finally {
+      setRecalculating(false);
     }
   };
 
@@ -785,7 +856,7 @@ const Index = () => {
         />
       )}
       {step === 'dashboard' && result && (
-        <DashboardScreen result={result} onReset={handleReset} />
+        <DashboardScreen result={result} onReset={handleReset} onRecalculateRoute={handleRecalculateRoute} recalculating={recalculating} />
       )}
     </div>
   );

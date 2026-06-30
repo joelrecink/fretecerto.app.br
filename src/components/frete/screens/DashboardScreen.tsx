@@ -3,6 +3,8 @@ import { CheckCircle, XCircle, AlertTriangle, RefreshCw, MapPin, Fuel, DollarSig
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import RouteMap from '@/components/frete/RouteMap';
+import type { ExportPoint } from '@/lib/routeExport';
 
 interface RoadRestriction {
   road: string;
@@ -58,6 +60,7 @@ interface SimulationResult {
   routeSuggestions?: string;
   aiAnalysis?: AIAnalysis;
   polyline?: string;
+  routeCoordinates?: [number, number][];
   geocodedPoints?: GeocodedPoint[];
   originCity?: string;
   destinationCity?: string;
@@ -97,12 +100,11 @@ interface SimulationResult {
 interface DashboardScreenProps {
   result: SimulationResult;
   onReset: () => void;
+  onRecalculateRoute?: (editedPoints: ExportPoint[]) => Promise<void> | void;
+  recalculating?: boolean;
 }
 
-const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset }) => {
-  const [mapImageUrl, setMapImageUrl] = useState<string | null>(null);
-  const [mapLoading, setMapLoading] = useState(false);
-
+const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset, onRecalculateRoute, recalculating }) => {
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -129,46 +131,6 @@ const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset }) =>
 
   const colors = viabilityColors[result.viabilityScore];
 
-  // Fetch map image from edge function
-  useEffect(() => {
-    const fetchMapImage = async () => {
-      if (!result.geocodedPoints || result.geocodedPoints.length < 2) return;
-      
-      setMapLoading(true);
-      try {
-        const { data, error } = await supabase.functions.invoke('get-route-map', {
-          body: {
-            polyline: result.polyline,
-            geocodedPoints: result.geocodedPoints,
-          },
-        });
-
-        if (error) {
-          console.error('Error fetching map:', error);
-          return;
-        }
-
-        // Convert blob to URL
-        if (data instanceof Blob) {
-          const url = URL.createObjectURL(data);
-          setMapImageUrl(url);
-        }
-      } catch (err) {
-        console.error('Failed to fetch map:', err);
-      } finally {
-        setMapLoading(false);
-      }
-    };
-
-    fetchMapImage();
-
-    // Cleanup URL on unmount
-    return () => {
-      if (mapImageUrl) {
-        URL.revokeObjectURL(mapImageUrl);
-      }
-    };
-  }, [result.geocodedPoints, result.polyline]);
 
   // Build WhatsApp share message
   const handleShareWhatsApp = () => {
@@ -253,35 +215,14 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
           </div>
         )}
 
-        {/* Route Map */}
-        {(mapImageUrl || mapLoading) && (
-          <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] overflow-hidden">
-            <div className="flex items-center gap-2 p-4 border-b border-[hsl(var(--border))]">
-              <Map size={18} className="text-blue-600" />
-              <span className="font-bold text-[hsl(var(--foreground))]">Rota no Mapa</span>
-            </div>
-            <div className="relative">
-              {mapLoading ? (
-                <div className="w-full h-48 bg-slate-100 flex items-center justify-center">
-                  <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                </div>
-              ) : mapImageUrl ? (
-                <img 
-                  src={mapImageUrl} 
-                  alt="Mapa da rota" 
-                  className="w-full h-48 object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).style.display = 'none';
-                  }}
-                />
-              ) : null}
-              {result.geocodedPoints && result.geocodedPoints.length >= 2 && (
-                <div className="absolute bottom-2 left-2 bg-white/90 backdrop-blur-sm px-3 py-1 rounded-lg text-sm font-medium">
-                  {result.geocodedPoints[0]?.address?.split(',')[0]} → {result.geocodedPoints[result.geocodedPoints.length - 1]?.address?.split(',')[0]}
-                </div>
-              )}
-            </div>
-          </div>
+        {/* Interactive Route Map (Leaflet + HERE) */}
+        {result.geocodedPoints && result.geocodedPoints.length >= 2 && (
+          <RouteMap
+            coordinates={result.routeCoordinates || []}
+            points={result.geocodedPoints.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }))}
+            onPointsChange={onRecalculateRoute}
+            loading={recalculating}
+          />
         )}
 
         {/* Key Metrics */}

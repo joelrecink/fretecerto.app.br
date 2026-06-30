@@ -33,6 +33,52 @@ interface TollDetail {
   currency: string;
 }
 
+// ---------- HERE Flexible Polyline decoder (v1) ----------
+const HERE_DECODING_TABLE = [
+  62, -1, -1, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
+  -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
+  22, 23, 24, 25, -1, -1, -1, -1, -1, -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+  36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
+];
+function decodeHerePolyline(encoded: string): [number, number][] {
+  if (!encoded) return [];
+  let i = 0;
+  const decodeChar = () => {
+    const c = encoded.charCodeAt(i++) - 45;
+    return c >= 0 && c < HERE_DECODING_TABLE.length ? HERE_DECODING_TABLE[c] : -1;
+  };
+  const decodeUnsigned = () => {
+    let result = 0, shift = 0;
+    while (i < encoded.length) {
+      const v = decodeChar();
+      result |= (v & 0x1f) << shift;
+      if ((v & 0x20) === 0) return result;
+      shift += 5;
+    }
+    return result;
+  };
+  const decodeSigned = () => {
+    const u = decodeUnsigned();
+    return (u & 1) ? ~(u >> 1) : (u >> 1);
+  };
+  const version = decodeUnsigned();
+  if (version !== 1) return [];
+  const header = decodeUnsigned();
+  const precision = header & 15;
+  const thirdDim = (header >> 4) & 7;
+  // const thirdDimPrecision = (header >> 7) & 15;
+  const factor = Math.pow(10, precision);
+  let lat = 0, lng = 0;
+  const result: [number, number][] = [];
+  while (i < encoded.length) {
+    lat += decodeSigned();
+    lng += decodeSigned();
+    if (thirdDim) decodeSigned();
+    result.push([lat / factor, lng / factor]);
+  }
+  return result;
+}
+
 // ---------- Geocoding via HERE ----------
 async function hereGeocode(address: string, apiKey: string): Promise<{ lat: number; lng: number } | null> {
   try {
@@ -171,6 +217,7 @@ serve(async (req) => {
       let totalMeters = 0;
       let totalSeconds = 0;
       const polylineSegments: string[] = [];
+      const routeCoordinates: [number, number][] = [];
       let tollIdCounter = 1;
 
       for (let i = 0; i < route.sections.length; i++) {
@@ -187,13 +234,23 @@ serve(async (req) => {
           duration: secSeconds / 60,
         });
 
-        if (section.polyline) polylineSegments.push(section.polyline);
+        if (section.polyline) {
+          polylineSegments.push(section.polyline);
+          const decoded = decodeHerePolyline(section.polyline);
+          // Avoid duplicating join points between sections
+          for (let k = 0; k < decoded.length; k++) {
+            if (k === 0 && routeCoordinates.length > 0) {
+              const last = routeCoordinates[routeCoordinates.length - 1];
+              if (last[0] === decoded[k][0] && last[1] === decoded[k][1]) continue;
+            }
+            routeCoordinates.push(decoded[k]);
+          }
+        }
 
         // Tolls: section.tolls is an array of toll structures with `fares` (price + currency)
         if (Array.isArray(section.tolls)) {
           for (const t of section.tolls) {
             const fares = Array.isArray(t.fares) ? t.fares : [];
-            // Prefer "pass" / single-trip fare; pick cheapest non-zero
             let price = 0;
             let currency = 'BRL';
             for (const f of fares) {
@@ -222,8 +279,6 @@ serve(async (req) => {
 
       totalDistanceKm = totalMeters / 1000;
       totalDurationHours = totalSeconds / 3600;
-      // HERE returns one flexible polyline per section. Frontend treats it as opaque
-      // and only ships it back to get-route-map, so concatenate with `;` separator.
       polyline = polylineSegments.join(';');
 
       const lats = geocodedPoints.map(p => p.lat);
@@ -245,6 +300,7 @@ serve(async (req) => {
         tollDetails,
         routeDetails,
         polyline,
+        routeCoordinates,
         geocodedPoints,
         bounds,
         summary,
@@ -297,8 +353,12 @@ serve(async (req) => {
     totalDistanceKm = (route.summary?.lengthInMeters ?? 0) / 1000;
     totalDurationHours = (route.summary?.travelTimeInSeconds ?? 0) / 3600;
     const pts: string[] = [];
+    const ttCoords: [number, number][] = [];
     for (const leg of route.legs ?? []) {
-      for (const p of leg.points ?? []) pts.push(`${p.latitude},${p.longitude}`);
+      for (const p of leg.points ?? []) {
+        pts.push(`${p.latitude},${p.longitude}`);
+        ttCoords.push([p.latitude, p.longitude]);
+      }
     }
     polyline = pts.join('|');
 
@@ -321,6 +381,7 @@ serve(async (req) => {
       tollDetails: [],
       routeDetails,
       polyline,
+      routeCoordinates: ttCoords,
       geocodedPoints,
       bounds,
       summary,
