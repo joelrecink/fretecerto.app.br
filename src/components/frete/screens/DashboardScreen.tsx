@@ -620,8 +620,8 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
         {result.routingEngine && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
             <p className="text-sm text-emerald-700">
-              🛰️ Rota calculada via <span className="font-bold">{result.routingEngine === 'tomtom' ? 'TomTom Truck Routing' : 'Google Maps'}</span>
-              {result.routingEngine === 'tomtom' && ' (otimizada para caminhões)'}
+              🛰️ Rota calculada via <span className="font-bold">{result.routingEngine === 'here' ? 'HERE Maps' : result.routingEngine === 'tomtom' ? 'TomTom Truck Routing' : 'Google Maps'}</span>
+              {(result.routingEngine === 'here' || result.routingEngine === 'tomtom') && ' (otimizada para caminhões)'}
             </p>
           </div>
         )}
