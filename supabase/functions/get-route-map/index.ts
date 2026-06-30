@@ -45,12 +45,17 @@ serve(async (req) => {
     url.searchParams.set('apiKey', hereApiKey);
     url.searchParams.set('style', 'explore.day');
 
-    // Route polylines (flexible polyline) — handle concatenated sections
+    // Route polylines — only include if total URL stays under ~6000 chars
     if (polyline) {
       const segments = polyline.split(';').filter(Boolean);
-      segments.forEach((seg, idx) => {
-        url.searchParams.append(`route${idx}`, `${seg};sc=2563eb;sd=ffffff;sw=5`);
-      });
+      const totalLen = segments.reduce((a, s) => a + s.length, 0);
+      if (totalLen < 5500) {
+        segments.forEach((seg, idx) => {
+          url.searchParams.append(`route${idx}`, `${seg};sc=2563eb;sd=ffffff;sw=5`);
+        });
+      } else {
+        console.warn(`Polyline too long (${totalLen} chars), rendering markers only`);
+      }
     }
 
     // POIs: green start, red end, blue intermediates
