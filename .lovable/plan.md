@@ -1,31 +1,30 @@
 
-## Diagnóstico
+## Ajuste: remover fallback para veículo pequeno
 
-Nos logs:
-1. HERE responde com sucesso no perfil `truck 9ax 63500kg` (distância/summary OK).
-2. Mas `routeCoordinates.length < 2` → dispara `throw "HERE retornou distância, mas não retornou o traçado navegável da estrada."`
-3. Cai no fallback TomTom → **401 Unauthorized** (chave `TOMTOM_API_KEY` inválida/expirada) → retorna 500 ao cliente.
+O sistema é exclusivo para **caminhão, carreta e caçamba**. Nenhum fluxo deve calcular ou sugerir rota como carro/veículo leve.
 
-Ou seja, o HERE aceitou o request mas não devolveu polyline decodificável naquela primeira tentativa, e como o try/catch está **fora** do loop de perfis, os perfis mais leves (40t, sem restrições, car) nunca são tentados.
+### Alterações em `supabase/functions/calculate-route/index.ts`
 
-## Correções em `supabase/functions/calculate-route/index.ts`
+Na função `calculateHereRoute`, remover o último item do array `attempts`:
 
-### 1. Mover validação da polyline para dentro do loop de perfis HERE
-Em `calculateHereRoute`, após montar `routeCoordinates` (mover parte do parsing para dentro do loop), se a polyline decodificada tiver < 2 pontos, registrar `lastErr` e **continuar para o próximo perfil** em vez de retornar aquele route. Assim, se o perfil "9 eixos" volta sem polyline, ele automaticamente tenta 40t, depois sem restrições, depois car.
+```ts
+{ mode: 'car', label: 'car fallback', params: {} }
+```
 
-Alternativa mais simples e menos invasiva: manter a estrutura atual mas, no handler, ao capturar o erro "não retornou o traçado navegável", **re-chamar `calculateHereRoute` pulando o primeiro perfil**. Vamos pela solução limpa: incluir a decodificação dentro do loop já no `calculateHereRoute` e validar coords antes de aceitar.
+Assim os perfis tentados ficam apenas:
+1. Truck com eixos/peso reais do usuário
+2. Truck padrão 40t (6 eixos)
+3. Truck sem restrições dimensionais
 
-### 2. Remover fallback TomTom (chave inválida)
-A `TOMTOM_API_KEY` está retornando 401. Em vez de tentar TomTom e vazar erro 500, retornar uma mensagem clara ao usuário:
+Se nenhum perfil de caminhão retornar rota navegável, o handler já responde 422 com mensagem clara ("Não foi possível calcular uma rota navegável para este veículo…"). Nada de silenciosamente cair para carro.
 
-> "Não foi possível calcular a rota navegável para este veículo (X eixos, Y toneladas) entre os pontos informados. Tente reduzir os eixos/peso ou revisar os endereços."
+### Verificação de outras telas
+Auditar rapidamente para confirmar que nenhum outro componente/edge function assume veículo leve:
+- `analyze-route-ai` — checar prompt/parâmetros
+- Formulários de cadastro de veículo — confirmar que só oferecem eixos/pesos de caminhão
 
-Isso deixa a UI mostrar erro amigável em vez de tela branca.
+Se algum texto ou opção mencionar "carro" / "veículo leve", removê-lo. (Provavelmente já não existe, mas confirmar.)
 
-### 3. Melhorar log de debug
-Logar `route.sections[0].polyline?.length` quando decodificação falha, para diagnóstico futuro.
-
-## Arquivos alterados
-- `supabase/functions/calculate-route/index.ts` (refatorar `calculateHereRoute` + remover bloco TomTom)
-
-Nenhuma alteração de frontend. Deploy automático do edge function.
+### Arquivos alterados
+- `supabase/functions/calculate-route/index.ts` (remover attempt "car fallback")
+- eventuais ajustes de labels se encontrados na auditoria

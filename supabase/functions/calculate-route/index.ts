@@ -132,8 +132,8 @@ async function calculateHereRoute(
       },
     },
     { mode: 'truck', label: 'truck no-restrictions', params: {} },
-    { mode: 'car', label: 'car fallback', params: {} },
   ];
+
 
   let lastErr = '';
   for (const attempt of attempts) {
