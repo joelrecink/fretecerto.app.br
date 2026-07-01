@@ -102,10 +102,10 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
   const [vehicleDropdownOpen, setVehicleDropdownOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const handleInputChange = (field: string, value: string) => {
-    const numValue = parseFloat(value.replace(',', '.')) || 0;
-    onUpdate(field, numValue);
+  const handleInputChange = (field: string, value: number | undefined) => {
+    onUpdate(field, value ?? 0);
   };
+
 
   const formatCurrency = (val: number | undefined) => {
     if (!val) return 'R$ 0,00';
