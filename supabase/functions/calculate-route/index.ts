@@ -162,11 +162,27 @@ async function calculateHereRoute(
       console.warn(lastErr, JSON.stringify(data).slice(0, 300));
       continue;
     }
-    console.log(`HERE routed with ${attempt.label}`);
+    // Validate that at least one section has a decodable polyline
+    const sections = data.routes[0].sections;
+    let totalCoords = 0;
+    let hasAnyPolyline = false;
+    for (const s of sections) {
+      if (s.polyline) {
+        hasAnyPolyline = true;
+        totalCoords += decodeHerePolyline(s.polyline).length;
+      }
+    }
+    if (!hasAnyPolyline || totalCoords < 2) {
+      lastErr = `HERE ${attempt.label}: route returned without decodable polyline (hasPolyline=${hasAnyPolyline}, coords=${totalCoords})`;
+      console.warn(lastErr);
+      continue;
+    }
+    console.log(`HERE routed with ${attempt.label} (${totalCoords} coords)`);
     return { route: data.routes[0], profile: attempt.label };
   }
   throw new Error(`HERE Routing failed after all fallbacks. Last: ${lastErr}`);
 }
+
 
 
 serve(async (req) => {
