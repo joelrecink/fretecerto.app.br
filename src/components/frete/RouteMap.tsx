@@ -83,7 +83,7 @@ function pickDeviationPoints(
 export function buildGoogleMapsUrlFromRoute(
   points: ExportPoint[],
   routeCoordinates: [number, number][] | undefined,
-  maxWaypoints = 9,
+  maxWaypoints = 3,
 ): string {
   const valid = points.filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
   if (valid.length < 2) return buildHereWeGoUrl(points);
@@ -91,9 +91,12 @@ export function buildGoogleMapsUrlFromRoute(
   const destination = valid[valid.length - 1];
   const userMids = valid.slice(1, -1);
 
+  // Só amostra âncoras se a rota for razoavelmente longa (>= 20 pontos no
+  // polyline). Em rotas curtas, o risco de um ponto amostrado cair em local
+  // irrotável (canteiro, viaduto, sentido único) supera o benefício.
   const remaining = Math.max(0, maxWaypoints - userMids.length);
   const sampled =
-    routeCoordinates && routeCoordinates.length > 2 && remaining > 0
+    routeCoordinates && routeCoordinates.length >= 20 && remaining > 0
       ? pickDeviationPoints(routeCoordinates, remaining)
       : [];
 
@@ -108,16 +111,14 @@ export function buildGoogleMapsUrlFromRoute(
     travelmode: 'driving',
     origin: fmt(origin.lat, origin.lng),
     destination: fmt(destination.lat, destination.lng),
-    // Força o Google a respeitar a ordem exata dos waypoints — sem reotimizar.
-    dir_action: 'navigate',
   });
-  if (waypoints.length) {
-    // Prefixo "via:" impede que o Google trate como parada (evita "chegou ao
-    // destino intermediário") E ancora o traçado na rodovia amostrada.
-    params.set('waypoints', waypoints.map((w) => `via:${w}`).join('|'));
-  }
+  // Waypoints sem prefixo "via:" — permitem que o Google faça pequeno snap à
+  // rua mais próxima em vez de rejeitar a rota inteira. Sem dir_action=navigate
+  // para não travar a reotimização.
+  if (waypoints.length) params.set('waypoints', waypoints.join('|'));
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
+
 
 
 // Link do HERE WeGo em modo caminhão (respeita restrições de eixos/altura/peso).
