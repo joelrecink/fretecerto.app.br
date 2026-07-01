@@ -1,5 +1,6 @@
 import React from 'react';
-import { Package, MapPin, Scale, Plus, Trash2, ArrowLeft, ArrowRight, Mic } from 'lucide-react';
+import { Package, Scale, Plus, Trash2, ArrowLeft, ArrowRight, Mic } from 'lucide-react';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 interface RoutePoint {
   id: string;
@@ -7,6 +8,8 @@ interface RoutePoint {
   value: number;
   weight?: number;
   valuePerTon?: number;
+  lat?: number;
+  lng?: number;
 }
 
 interface PickupScreenProps {
@@ -15,6 +18,7 @@ interface PickupScreenProps {
   onAddPickup: () => void;
   onRemovePickup: (id: string) => void;
   onUpdatePickup: (id: string, field: string, value: string | number) => void;
+  onSelectPickupAddress?: (id: string, address: string, lat: number, lng: number) => void;
   onNext: () => void;
   onBack: () => void;
 }
@@ -25,6 +29,7 @@ const PickupScreen: React.FC<PickupScreenProps> = ({
   onAddPickup,
   onRemovePickup,
   onUpdatePickup,
+  onSelectPickupAddress,
   onNext,
   onBack,
 }) => {
@@ -96,18 +101,27 @@ const PickupScreen: React.FC<PickupScreenProps> = ({
             </div>
 
             {/* Address */}
-            <div className="relative">
-              <input
-                type="text"
-                value={pickup.address}
-                onChange={(e) => onUpdatePickup(pickup.id, 'address', e.target.value)}
-                placeholder="Ex: Paranavaí, Santo Inácio, SP"
-                className="w-full px-4 py-4 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none transition-all"
-              />
-              <button className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-[hsl(var(--muted-foreground))] hover:text-emerald-600 transition-colors">
-                <Mic size={20} />
-              </button>
-            </div>
+            <AddressAutocomplete
+              value={pickup.address}
+              hasCoords={pickup.lat != null && pickup.lng != null}
+              onTextChange={(text) => {
+                onUpdatePickup(pickup.id, 'address', text);
+                if (pickup.lat != null) onUpdatePickup(pickup.id, 'lat', 0);
+                if (pickup.lng != null) onUpdatePickup(pickup.id, 'lng', 0);
+              }}
+              onSelect={(addr, lat, lng) => {
+                if (onSelectPickupAddress) onSelectPickupAddress(pickup.id, addr, lat, lng);
+                else onUpdatePickup(pickup.id, 'address', addr);
+              }}
+              placeholder="Ex: Paranavaí, Santo Inácio, SP"
+              accent="emerald"
+              rightSlot={
+                <button type="button" className="p-1 text-[hsl(var(--muted-foreground))] hover:text-emerald-600 transition-colors">
+                  <Mic size={18} />
+                </button>
+              }
+            />
+
 
             {/* Weight and Value */}
             <div className="grid grid-cols-3 gap-4">
