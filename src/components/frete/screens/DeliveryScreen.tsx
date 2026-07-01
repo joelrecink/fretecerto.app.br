@@ -1,10 +1,13 @@
 import React from 'react';
 import { MapPin, Plus, Trash2, ArrowLeft, Calculator, Mic } from 'lucide-react';
+import AddressAutocomplete from '../AddressAutocomplete';
 
 interface RoutePoint {
   id: string;
   address: string;
   value: number;
+  lat?: number;
+  lng?: number;
 }
 
 interface DeliveryScreenProps {
@@ -12,6 +15,7 @@ interface DeliveryScreenProps {
   onAddDelivery: () => void;
   onRemoveDelivery: (id: string) => void;
   onUpdateDelivery: (id: string, field: string, value: string | number) => void;
+  onSelectDeliveryAddress?: (id: string, address: string, lat: number, lng: number) => void;
   onCalculate: () => void;
   onBack: () => void;
   loading?: boolean;
@@ -22,6 +26,7 @@ const DeliveryScreen: React.FC<DeliveryScreenProps> = ({
   onAddDelivery,
   onRemoveDelivery,
   onUpdateDelivery,
+  onSelectDeliveryAddress,
   onCalculate,
   onBack,
   loading = false,
@@ -66,18 +71,27 @@ const DeliveryScreen: React.FC<DeliveryScreenProps> = ({
             </div>
 
             {/* Address */}
-            <div className="relative">
-              <input
-                type="text"
-                value={delivery.address}
-                onChange={(e) => onUpdateDelivery(delivery.id, 'address', e.target.value)}
-                placeholder="Ex: Praça da Saudade, SP"
-                className="w-full px-4 py-4 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              />
-              <button className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-[hsl(var(--muted-foreground))] hover:text-blue-600 transition-colors">
-                <Mic size={20} />
-              </button>
-            </div>
+            <AddressAutocomplete
+              value={delivery.address}
+              hasCoords={delivery.lat != null && delivery.lng != null}
+              onTextChange={(text) => {
+                onUpdateDelivery(delivery.id, 'address', text);
+                if (delivery.lat != null) onUpdateDelivery(delivery.id, 'lat', 0);
+                if (delivery.lng != null) onUpdateDelivery(delivery.id, 'lng', 0);
+              }}
+              onSelect={(addr, lat, lng) => {
+                if (onSelectDeliveryAddress) onSelectDeliveryAddress(delivery.id, addr, lat, lng);
+                else onUpdateDelivery(delivery.id, 'address', addr);
+              }}
+              placeholder="Ex: Praça da Saudade, SP"
+              accent="blue"
+              rightSlot={
+                <button type="button" className="p-1 text-[hsl(var(--muted-foreground))] hover:text-blue-600 transition-colors">
+                  <Mic size={18} />
+                </button>
+              }
+            />
+
 
             {/* Additional Value */}
             <div className="space-y-2">

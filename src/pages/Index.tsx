@@ -84,6 +84,8 @@ interface RoutePoint {
   address: string;
   value: number;
   weight?: number;
+  lat?: number;
+  lng?: number;
 }
 
 interface RoadRestriction {
@@ -284,6 +286,13 @@ const Index = () => {
   const removeDelivery = (id: string) => setDeliveries(prev => prev.filter(d => d.id !== id));
   const updateDelivery = (id: string, field: string, value: string | number) => {
     setDeliveries(prev => prev.map(d => d.id === id ? { ...d, [field]: value } : d));
+  };
+
+  const selectPickupAddress = (id: string, address: string, lat: number, lng: number) => {
+    setPickups(prev => prev.map(p => p.id === id ? { ...p, address, lat, lng } : p));
+  };
+  const selectDeliveryAddress = (id: string, address: string, lat: number, lng: number) => {
+    setDeliveries(prev => prev.map(d => d.id === id ? { ...d, address, lat, lng } : d));
   };
 
   const totalFreight = [...pickups, ...deliveries].reduce((acc, p) => acc + (p.value || 0), 0);
@@ -821,6 +830,7 @@ const Index = () => {
           onAddPickup={addPickup}
           onRemovePickup={removePickup}
           onUpdatePickup={updatePickup}
+          onSelectPickupAddress={selectPickupAddress}
           onNext={() => setStep('delivery')}
           onBack={() => setStep('costs')}
         />
@@ -831,6 +841,7 @@ const Index = () => {
           onAddDelivery={addDelivery}
           onRemoveDelivery={removeDelivery}
           onUpdateDelivery={updateDelivery}
+          onSelectDeliveryAddress={selectDeliveryAddress}
           onCalculate={() => setStep('summary')}
           onBack={() => setStep('pickup')}
           loading={calculating || routeLoading}
