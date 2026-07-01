@@ -103,6 +103,12 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
     [coordinates],
   );
 
+  const exportPoints: ExportPoint[] = [
+    livePoints[0],
+    ...waypoints,
+    ...livePoints.slice(1),
+  ].filter(Boolean) as ExportPoint[];
+
   const markerCoords: [number, number][] = useMemo(
     () => exportPoints.map((p) => [p.lat, p.lng] as [number, number]),
     [exportPoints],
@@ -184,12 +190,6 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
   const exportPNG = async () => {
     window.print();
   };
-
-  const exportPoints: ExportPoint[] = [
-    livePoints[0],
-    ...waypoints,
-    ...livePoints.slice(1),
-  ].filter(Boolean) as ExportPoint[];
 
   const hasNavigationRoute = navigationCoords.length > 1;
 
