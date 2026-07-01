@@ -87,11 +87,7 @@ const DeliveryScreen: React.FC<DeliveryScreenProps> = ({
               }}
               placeholder="Ex: Praça da Saudade, SP"
               accent="blue"
-              rightSlot={
-                <button type="button" className="p-1 text-[hsl(var(--muted-foreground))] hover:text-blue-600 transition-colors">
-                  <Mic size={18} />
-                </button>
-              }
+              enableVoice
             />
 
 
@@ -100,16 +96,15 @@ const DeliveryScreen: React.FC<DeliveryScreenProps> = ({
               <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Custo/Valor Adicional</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm font-bold">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={delivery.value || ''}
-                  onChange={(e) => handleNumericChange(delivery.id, 'value', e.target.value)}
+                <NumericInput
+                  value={delivery.value}
+                  onChange={(v) => handleNumericChange(delivery.id, 'value', v)}
                   placeholder="0,00"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                 />
               </div>
             </div>
+
           </div>
         ))}
 
