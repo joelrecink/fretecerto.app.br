@@ -34,51 +34,72 @@ interface TollDetail {
   currency: string;
 }
 
-// ---------- HERE Flexible Polyline decoder (v1) ----------
-const HERE_DECODING_TABLE = [
-  62, -1, -1, 63, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, -1, -1, -1, -1, -1, -1,
-  -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
-  22, 23, 24, 25, -1, -1, -1, -1, -1, -1, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
-  36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51,
-];
-function decodeHerePolyline(encoded: string): [number, number][] {
-  if (!encoded) return [];
-  let i = 0;
-  const decodeChar = () => {
-    const c = encoded.charCodeAt(i++) - 45;
-    return c >= 0 && c < HERE_DECODING_TABLE.length ? HERE_DECODING_TABLE[c] : -1;
-  };
-  const decodeUnsigned = () => {
-    let result = 0, shift = 0;
-    while (i < encoded.length) {
-      const v = decodeChar();
-      result |= (v & 0x1f) << shift;
-      if ((v & 0x20) === 0) return result;
+// ---------- HERE Flexible Polyline decoder (official reference implementation) ----------
+// https://github.com/heremaps/flexible-polyline/blob/master/javascript/flexible-polyline.js
+const HERE_ENCODING_TABLE =
+  'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+const HERE_DECODING_TABLE: number[] = (() => {
+  const t: number[] = new Array(256).fill(-1);
+  for (let i = 0; i < HERE_ENCODING_TABLE.length; i++) {
+    t[HERE_ENCODING_TABLE.charCodeAt(i)] = i;
+  }
+  return t;
+})();
+
+function decodeUnsignedValues(encoded: string): number[] {
+  let result = 0;
+  let shift = 0;
+  const out: number[] = [];
+  for (let i = 0; i < encoded.length; i++) {
+    const v = HERE_DECODING_TABLE[encoded.charCodeAt(i)];
+    if (v < 0) throw new Error('Invalid encoding char at ' + i);
+    result |= (v & 0x1f) << shift;
+    if ((v & 0x20) === 0) {
+      out.push(result);
+      result = 0;
+      shift = 0;
+    } else {
       shift += 5;
     }
-    return result;
-  };
-  const decodeSigned = () => {
-    const u = decodeUnsigned();
-    return (u & 1) ? ~(u >> 1) : (u >> 1);
-  };
-  const version = decodeUnsigned();
-  if (version !== 1) return [];
-  const header = decodeUnsigned();
+  }
+  if (shift > 0) throw new Error('Invalid encoding (unterminated value)');
+  return out;
+}
+
+function decodeHerePolyline(encoded: string): [number, number][] {
+  if (!encoded) return [];
+  let values: number[];
+  try {
+    values = decodeUnsignedValues(encoded);
+  } catch (e) {
+    console.warn('flexpolyline decode error:', (e as Error).message);
+    return [];
+  }
+  if (values.length < 2) return [];
+  const version = values[0];
+  if (version !== 1) {
+    console.warn('flexpolyline: unsupported version', version);
+    return [];
+  }
+  const header = values[1];
   const precision = header & 15;
   const thirdDim = (header >> 4) & 7;
   // const thirdDimPrecision = (header >> 7) & 15;
   const factor = Math.pow(10, precision);
-  let lat = 0, lng = 0;
+  const dims = thirdDim ? 3 : 2;
+  const rest = values.slice(2);
   const result: [number, number][] = [];
-  while (i < encoded.length) {
-    lat += decodeSigned();
-    lng += decodeSigned();
-    if (thirdDim) decodeSigned();
+  let lat = 0, lng = 0;
+  for (let i = 0; i + dims - 1 < rest.length; i += dims) {
+    const dLat = (rest[i] & 1) ? ~(rest[i] >> 1) : (rest[i] >> 1);
+    const dLng = (rest[i + 1] & 1) ? ~(rest[i + 1] >> 1) : (rest[i + 1] >> 1);
+    lat += dLat;
+    lng += dLng;
     result.push([lat / factor, lng / factor]);
   }
   return result;
 }
+
 
 // ---------- Geocoding via HERE ----------
 async function hereGeocode(address: string, apiKey: string): Promise<{ lat: number; lng: number } | null> {
