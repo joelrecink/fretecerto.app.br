@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Loader2, MapPin } from 'lucide-react';
+import { Check, Loader2, MapPin, Mic, MicOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useSpeechToText } from '@/hooks/useSpeechToText';
 
 interface Suggestion {
   id: string;
@@ -18,6 +19,8 @@ interface AddressAutocompleteProps {
   placeholder?: string;
   accent?: 'emerald' | 'blue';
   rightSlot?: React.ReactNode;
+  /** Enable microphone for voice dictation of the address. */
+  enableVoice?: boolean;
 }
 
 const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
@@ -28,7 +31,9 @@ const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
   placeholder,
   accent = 'emerald',
   rightSlot,
+  enableVoice = false,
 }) => {
+
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
