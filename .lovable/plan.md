@@ -1,32 +1,24 @@
-## Objetivo
+## Problema
 
-Trocar/complementar o compartilhamento por **link** do HERE WeGo por um **arquivo GeoJSON** anexável (WhatsApp, e-mail, etc.). Ao abrir o arquivo no celular com o HERE WeGo instalado, ele importa o traçado e as paradas direto, sem cair na tela "Baixe o app".
+O link atual do Google Maps usa 9 waypoints com prefixo `via:` + `dir_action=navigate`. Isso é o combo mais rígido possível — e é justamente o que faz o Maps devolver **"não foi possível calcular a rota"**:
 
-## O que muda
+- `via:` obriga o Google a passar exatamente pelo ponto. Se o ponto amostrado do polyline HERE cair num canteiro central, viaduto, trecho de sentido único contrário ou fora da malha do Google, a rota inteira é rejeitada.
+- 9 pontos `via:` em sequência multiplicam a chance de pelo menos um falhar.
+- `dir_action=navigate` piora: proíbe reotimização, então qualquer ponto ruim mata tudo.
 
-### 1. `src/lib/routeExport.ts` — nova função `toGeoJSON`
-Gera um `FeatureCollection` com:
-- **LineString** do traçado navegável (`routeCoordinates` decodificado da HERE, já em modo caminhão) — coordenadas em `[lng, lat]` como manda o padrão GeoJSON.
-- **Features Point** para Origem, Paradas e Destino, com `properties.name` e `properties.type` (`origin` / `waypoint` / `destination`).
-- `properties` no nível da rota: distância total (km), duração (h), perfil de veículo (eixos) e data de geração.
+## Correção em `src/components/frete/RouteMap.tsx` → `buildGoogleMapsUrlFromRoute`
 
-### 2. `src/components/frete/screens/DashboardScreen.tsx`
-Substituir o botão atual **"Baixar rota em GPX"** por **"Baixar rota GeoJSON (HERE WeGo)"**:
-- Monta os pontos (origem + paradas fixas + waypoints do motorista + destino).
-- Usa `result.routeCoordinates` (traçado real do caminhão calculado pela HERE); se estiver vazio, cai para linha reta entre pontos.
-- Chama `toGeoJSON(...)` e usa `download()` com MIME `application/geo+json` e nome `rota-fretecerto-YYYY-MM-DD-HHmm.geojson`.
-- Toast explicando: "Abra o arquivo no celular — o HERE WeGo importa o traçado direto."
-
-Manter os botões existentes (Google Maps travado por waypoints, HERE WeGo Truck via link, Compartilhar WhatsApp com links) — o GeoJSON é um **caminho adicional** para quem prefere abrir o arquivo em vez do link.
-
-### 3. Opcional na mensagem do WhatsApp
-Adicionar uma linha explicativa: *"Prefere abrir no app? Baixe o GeoJSON no botão acima e abra com o HERE WeGo."* — sem anexar o arquivo automaticamente (WhatsApp Web via `wa.me` não aceita anexos programáticos; o motorista baixa e anexa manualmente, ou o usuário pode compartilhar via *share sheet* nativo em outro passo).
+1. **Reduzir para no máximo 3 waypoints âncora** (em vez de 9). Menos pontos = menor probabilidade de um deles ser irrotável. 3 âncoras bem escolhidas já forçam o Google a seguir o corredor rodoviário do caminhão em rotas longas.
+2. **Remover o prefixo `via:`**. Waypoints normais permitem que o Google ajuste levemente para a rua mais próxima em vez de rejeitar tudo.
+3. **Remover `dir_action=navigate`**. Deixa o Maps abrir na tela de preview de rota (que é o comportamento normal do compartilhamento), permitindo pequenos ajustes.
+4. **Manter a amostragem por maior desvio** (Douglas-Peucker invertido) — a lógica está certa, só reduzir a contagem.
+5. **Fallback seguro**: se a rota HERE tem menos de ~50 km ou menos de 20 pontos no polyline, não injetar waypoints amostrados — só usar origem + destino + paradas do usuário. Rotas curtas raramente precisam de trava e o risco de ponto ruim supera o benefício.
 
 ## Fora do escopo
 
-- Web Share API nível 2 (`navigator.share` com `files`) — pode ser adicionada depois se você quiser um botão "Compartilhar arquivo" que aciona o menu nativo do celular (WhatsApp, e-mail, Drive) já com o `.geojson` anexado. Diga se quer incluir agora.
-- Alterações no edge function `calculate-route` — o dado já está pronto no `routeCoordinates`.
+- Não alterar `buildHereWeGoTruckUrl`, o GeoJSON ou os botões — só o gerador do link do Google Maps.
+- Não mexer em edge functions.
 
-## Observação técnica honesta
+## Observação honesta
 
-O HERE WeGo importa GeoJSON como **coleção/rota visualizável**, não substitui o cálculo de navegação turn-by-turn do próprio app — mas mostra o traçado exato calculado para o caminhão e as paradas, sem depender de link universal nem cair em interstitial de download.
+Mesmo com 3 âncoras sem `via:`, o Google Maps **pode ainda sugerir um atalho pontual** entre duas âncoras se existir uma estrada bem mais curta liberada para carro. A trava perfeita só existe com o app de caminhão (HERE WeGo Truck). Este ajuste devolve a **abertura confiável** do link e mantém a rota **próxima** da do caminhão na maior parte do percurso — que era o objetivo do compartilhamento rápido pelo WhatsApp.
