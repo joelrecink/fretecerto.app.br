@@ -88,6 +88,7 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
   const [livePoints, setLivePoints] = useState<ExportPoint[]>(points);
   const [waypoints, setWaypoints] = useState<ExportPoint[]>([]);
   const [addMode, setAddMode] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const originalPoints = useRef<ExportPoint[]>(points);
   const debounceRef = useRef<number | null>(null);
   const mapRef = useRef<L.Map | null>(null);
