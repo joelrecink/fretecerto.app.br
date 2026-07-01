@@ -223,12 +223,13 @@ const OperationalScreen: React.FC<OperationalScreenProps> = ({
               >
                 <Minus size={20} />
               </button>
-              <input
-                type="text"
+              <NumericInput
+                integer
                 value={data.drivingHoursPerDay}
-                onChange={(e) => handleInputChange('drivingHoursPerDay', e.target.value)}
+                onChange={(v) => handleInputChange('drivingHoursPerDay', v)}
                 className="flex-1 px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-center text-lg font-bold"
               />
+
               <button
                 onClick={() => onUpdate('drivingHoursPerDay', Math.min(24, data.drivingHoursPerDay + 1))}
                 className="w-12 h-12 rounded-xl border-2 border-[hsl(var(--border))] flex items-center justify-center hover:bg-[hsl(var(--secondary))] transition-colors"
