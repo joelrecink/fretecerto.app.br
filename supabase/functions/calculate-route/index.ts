@@ -15,6 +15,7 @@ interface RoutePoint {
 interface RouteRequest {
   origins: RoutePoint[];
   destinations: RoutePoint[];
+  waypoints?: RoutePoint[]; // intermediate points user added on the map
   axles: number;
   cargoCapacity?: number; // tons
   vehicleWeight?: number; // kg
