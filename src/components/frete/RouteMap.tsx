@@ -271,8 +271,8 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
             <ClickToAdd enabled={addMode} onAdd={addWaypoint} />
             {coordinates && coordinates.length > 1 ? (
               <>
-                <Polyline positions={coordinates} pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.9 }} />
-                <Polyline positions={coordinates} pathOptions={{ color: '#dc2626', weight: 6, opacity: 0.95 }} />
+                <Polyline positions={coordinates} pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.95 }} />
+                <Polyline positions={coordinates} pathOptions={{ color: '#1d6cff', weight: 6, opacity: 1 }} />
               </>
             ) : (
               exportPoints.length > 1 && (
