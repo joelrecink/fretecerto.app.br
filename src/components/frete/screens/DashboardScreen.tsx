@@ -257,7 +257,7 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
           <RouteMap
             coordinates={result.routeCoordinates || []}
             points={result.geocodedPoints.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }))}
-            onPointsChange={onRecalculateRoute}
+            onPointsChange={handleMapChange}
             loading={recalculating}
           />
         )}
