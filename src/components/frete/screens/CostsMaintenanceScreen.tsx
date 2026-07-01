@@ -890,14 +890,13 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Percentual ARDA (%)</label>
                 <div className="relative">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={data.ardaPercentage || 30}
-                    onChange={(e) => handleInputChange('ardaPercentage', e.target.value)}
+                  <NumericInput
+                    value={data.ardaPercentage ?? 30}
+                    onChange={(v) => handleInputChange('ardaPercentage', v)}
                     placeholder="30"
                     className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                   />
+
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">%</span>
                 </div>
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">Padrão: 30% sobre horas extras</p>
