@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L, { LatLngBoundsExpression } from 'leaflet';
-import { Download, RotateCcw, Map as MapIcon, FileJson, Plus, Trash2, RefreshCw, Navigation } from 'lucide-react';
+import { Download, RotateCcw, Map as MapIcon, FileJson, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { toGPX, toKML, toJSON, download, ExportPoint } from '@/lib/routeExport';
 
-function buildHereWeGoUrl(points: ExportPoint[]): string {
+export function buildHereWeGoUrl(points: ExportPoint[]): string {
   const segs = points
     .filter(Boolean)
     .map((p) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)},${encodeURIComponent(p.address || 'Ponto')}`);
