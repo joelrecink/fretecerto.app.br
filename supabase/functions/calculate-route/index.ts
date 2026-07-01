@@ -106,35 +106,68 @@ async function calculateHereRoute(
   const destination = `${points[points.length - 1].lat},${points[points.length - 1].lng}`;
   const vias = points.slice(1, -1).map(p => `via=${p.lat},${p.lng}`);
 
-  const params = new URLSearchParams({
-    transportMode: 'truck',
-    origin,
-    destination,
-    return: 'polyline,summary,tolls',
-    'vehicle[grossWeight]': String(Math.round(opts.weightKg)),
-    'vehicle[height]': String(Math.round(opts.heightM * 100)),  // cm
-    'vehicle[width]': String(Math.round(opts.widthM * 100)),
-    'vehicle[length]': String(Math.round(opts.lengthM * 100)),
-    'vehicle[axleCount]': String(opts.axles),
-    currency: 'BRL',
-    lang: 'pt-BR',
-    apiKey,
-  });
-  // URLSearchParams won't accept duplicate `via` cleanly across all envs — build URL manually
-  let url = `https://router.hereapi.com/v8/routes?${params.toString()}`;
-  if (vias.length) url += '&' + vias.join('&');
+  // Try progressively lighter vehicle profiles until HERE returns a valid route.
+  // Heavy trucks (9 axles / 60t+) often fail with "no routes returned" on Brazilian roads.
+  const attempts: Array<{ mode: string; label: string; params: Record<string, string> }> = [
+    {
+      mode: 'truck',
+      label: `truck ${opts.axles}ax ${Math.round(opts.weightKg)}kg`,
+      params: {
+        'vehicle[grossWeight]': String(Math.round(opts.weightKg)),
+        'vehicle[height]': String(Math.round(opts.heightM * 100)),
+        'vehicle[width]': String(Math.round(opts.widthM * 100)),
+        'vehicle[length]': String(Math.round(opts.lengthM * 100)),
+        'vehicle[axleCount]': String(opts.axles),
+      },
+    },
+    {
+      mode: 'truck',
+      label: 'truck standard (40t)',
+      params: {
+        'vehicle[grossWeight]': '40000',
+        'vehicle[height]': '400',
+        'vehicle[width]': '255',
+        'vehicle[length]': '1815',
+        'vehicle[axleCount]': '6',
+      },
+    },
+    { mode: 'truck', label: 'truck no-restrictions', params: {} },
+    { mode: 'car', label: 'car fallback', params: {} },
+  ];
 
-  const r = await fetch(url);
-  if (!r.ok) {
-    const text = await r.text();
-    throw new Error(`HERE Routing error ${r.status}: ${text}`);
+  let lastErr = '';
+  for (const attempt of attempts) {
+    const params = new URLSearchParams({
+      transportMode: attempt.mode,
+      origin,
+      destination,
+      return: 'polyline,summary,tolls',
+      currency: 'BRL',
+      lang: 'pt-BR',
+      apiKey,
+      ...attempt.params,
+    });
+    let url = `https://router.hereapi.com/v8/routes?${params.toString()}`;
+    if (vias.length) url += '&' + vias.join('&');
+
+    const r = await fetch(url);
+    if (!r.ok) {
+      lastErr = `HERE ${attempt.label}: HTTP ${r.status} ${await r.text()}`;
+      console.warn(lastErr);
+      continue;
+    }
+    const data = await r.json();
+    if (!data.routes || !data.routes[0] || !data.routes[0].sections?.length) {
+      lastErr = `HERE ${attempt.label}: no routes`;
+      console.warn(lastErr, JSON.stringify(data).slice(0, 300));
+      continue;
+    }
+    console.log(`HERE routed with ${attempt.label}`);
+    return { route: data.routes[0], profile: attempt.label };
   }
-  const data = await r.json();
-  if (!data.routes || !data.routes[0]) {
-    throw new Error('HERE Routing: no routes returned');
-  }
-  return data.routes[0];
+  throw new Error(`HERE Routing failed after all fallbacks. Last: ${lastErr}`);
 }
+
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
