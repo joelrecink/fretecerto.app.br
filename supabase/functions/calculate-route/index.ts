@@ -248,11 +248,12 @@ serve(async (req) => {
 
     // ---- HERE Routing ----
     try {
-      const route = await calculateHereRoute(
+      const { route, profile: hereProfile } = await calculateHereRoute(
         geocodedPoints,
         { axles, weightKg, heightM, widthM, lengthM },
         hereApiKey,
       );
+
 
       let totalMeters = 0;
       let totalSeconds = 0;
