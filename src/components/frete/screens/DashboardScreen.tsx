@@ -3,7 +3,7 @@ import { CheckCircle, XCircle, AlertTriangle, RefreshCw, MapPin, Fuel, DollarSig
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import RouteMap, { openInHereMaps } from '@/components/frete/RouteMap';
+import RouteMap, { buildHereWeGoUrl } from '@/components/frete/RouteMap';
 import type { ExportPoint } from '@/lib/routeExport';
 import { exportDriverRoutePdf } from '@/lib/tripExport';
 
