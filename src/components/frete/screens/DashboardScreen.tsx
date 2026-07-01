@@ -268,18 +268,30 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
                   toast.error('Rota incompleta: origem e destino são necessários.');
                   return;
                 }
-                // Insere waypoints entre origem (0) e destino (último)
                 const origin = base[0];
                 const destination = base[base.length - 1];
                 const middle = base.slice(1, -1);
                 const full: ExportPoint[] = [origin, ...middle, ...driverWaypoints, destination];
-                openInHereMaps(full);
-                toast.success(`Abrindo HERE WeGo com ${full.length} pontos...`);
+                const hereUrl = buildHereWeGoUrl(full);
+                const distancia = result.totalDistanceKm.toLocaleString('pt-BR');
+                const paradas = full
+                  .map((p, i) => {
+                    const tipo = i === 0 ? '📍 Origem' : i === full.length - 1 ? '🏁 Destino' : `➡️ Parada ${i}`;
+                    return `${tipo}: ${p.address}`;
+                  })
+                  .join('\n');
+                const msg =
+                  `🚚 *Rota pronta para navegação*\n\n${paradas}\n\n` +
+                  `📏 Distância total: ${distancia} km\n\n` +
+                  `🗺️ Abrir no HERE WeGo:\n${hereUrl}`;
+                const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
+                window.open(waUrl, '_blank', 'noopener,noreferrer');
+                toast.success('Abrindo WhatsApp com o link da rota…');
               }}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-bold shadow-lg hover:shadow-xl active:scale-[0.98] transition"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-gradient-to-r from-green-500 to-green-600 text-white font-bold shadow-lg hover:shadow-xl active:scale-[0.98] transition"
             >
               <Navigation size={18} />
-              Compartilhar rota pronta para navegação
+              Compartilhar rota no WhatsApp
             </button>
           </div>
         )}
