@@ -3,6 +3,8 @@ import { Wrench, Car, Droplets, Shield, ArrowLeft, ArrowRight, Check, Cog, Save,
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import type { SavedVehicle } from '@/hooks/useVehicles';
+import NumericInput from '../NumericInput';
+
 
 interface CostsData {
   licensePlate?: string;
