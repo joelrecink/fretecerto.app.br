@@ -187,68 +187,78 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-[hsl(var(--border))] overflow-hidden">
       <div className="flex items-center justify-between gap-2 p-3 border-b border-[hsl(var(--border))]">
-        <div className="flex items-center gap-2">
-          <MapIcon size={18} className="text-blue-600" />
-          <span className="font-bold text-sm">Mapa da Rota</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <MapIcon size={18} className="text-emerald-600 shrink-0" />
+          <span className="font-bold text-sm truncate">Mapa da Rota</span>
           {loading && (
-            <span className="ml-2 inline-flex items-center gap-1 text-xs text-blue-600">
-              <span className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+            <span className="ml-1 inline-flex items-center gap-1 text-xs text-emerald-600">
+              <span className="w-3 h-3 border-2 border-emerald-600 border-t-transparent rounded-full animate-spin" />
               recalculando…
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1 flex-wrap justify-end">
-          <button
-            onClick={recalcNow}
-            title="Recalcular rota agora"
-            className="px-2 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1"
-          >
-            <RefreshCw size={14} /> Recalcular
-          </button>
+        <div className="flex items-center gap-1">
           <button
             onClick={() => setAddMode((v) => !v)}
-            title={addMode ? 'Cancelar adição' : 'Adicionar ponto intermediário'}
-            className={`p-2 rounded-lg text-xs font-bold ${addMode ? 'bg-violet-600 text-white' : 'hover:bg-slate-100 text-violet-600'}`}
+            title={addMode ? 'Cancelar' : 'Adicionar parada'}
+            aria-label="Adicionar parada"
+            className={`h-9 w-9 flex items-center justify-center rounded-full transition ${
+              addMode ? 'bg-violet-600 text-white shadow' : 'bg-slate-100 hover:bg-slate-200 text-violet-600'
+            }`}
           >
-            <Plus size={16} />
+            {addMode ? <X size={16} /> : <Plus size={18} />}
           </button>
           <button
-            onClick={resetCoords}
-            title="Resetar coordenadas originais"
-            className="p-2 hover:bg-slate-100 rounded-lg text-slate-600"
+            onClick={recalcNow}
+            title="Recalcular agora"
+            aria-label="Recalcular"
+            className="h-9 w-9 flex items-center justify-center rounded-full bg-emerald-600 text-white hover:bg-emerald-700 shadow"
           >
-            <RotateCcw size={16} />
+            <RefreshCw size={16} />
           </button>
-          <button
-            onClick={() => download('rota-frete.gpx', 'application/gpx+xml', toGPX(allCoords, exportPoints))}
-            title="Exportar GPX"
-            className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 text-xs font-bold"
-          >
-            GPX
-          </button>
-          <button
-            onClick={() =>
-              download('rota-frete.kml', 'application/vnd.google-earth.kml+xml', toKML(allCoords, exportPoints))
-            }
-            title="Exportar KML"
-            className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 text-xs font-bold"
-          >
-            KML
-          </button>
-          <button
-            onClick={() => download('rota-frete.json', 'application/json', toJSON(allCoords, exportPoints))}
-            title="Exportar JSON"
-            className="p-2 hover:bg-slate-100 rounded-lg text-slate-600"
-          >
-            <FileJson size={16} />
-          </button>
-          <button
-            onClick={exportPNG}
-            title="Exportar imagem do mapa"
-            className="p-2 hover:bg-slate-100 rounded-lg text-slate-600"
-          >
-            <Download size={16} />
-          </button>
+          <div className="relative">
+            <button
+              onClick={() => setMenuOpen((v) => !v)}
+              title="Mais opções"
+              aria-label="Mais opções"
+              className="h-9 w-9 flex items-center justify-center rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700"
+            >
+              <MoreVertical size={16} />
+            </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 mt-2 w-52 bg-white rounded-xl shadow-xl border border-slate-200 py-1 z-50">
+                  <button
+                    onClick={() => { resetCoords(); setMenuOpen(false); }}
+                    className="w-full flex items-center gap-2 px-3 py-2 text-sm hover:bg-slate-50 text-slate-700"
+                  >
+                    <RotateCcw size={14} /> Resetar rota original
+                  </button>
+                  <div className="border-t border-slate-100 my-1" />
+                  <p className="px-3 py-1 text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Exportar</p>
+                  <button
+                    onClick={() => { download('rota-frete.gpx', 'application/gpx+xml', toGPX(allCoords, exportPoints)); setMenuOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 text-slate-700"
+                  >
+                    GPX (navegadores)
+                  </button>
+                  <button
+                    onClick={() => { download('rota-frete.kml', 'application/vnd.google-earth.kml+xml', toKML(allCoords, exportPoints)); setMenuOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 text-slate-700"
+                  >
+                    KML (Google Earth)
+                  </button>
+                  <button
+                    onClick={() => { download('rota-frete.json', 'application/json', toJSON(allCoords, exportPoints)); setMenuOpen(false); }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-slate-50 text-slate-700"
+                  >
+                    JSON (dados)
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
