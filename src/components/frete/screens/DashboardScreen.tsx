@@ -261,18 +261,45 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
               onPointsChange={handleMapChange}
               loading={recalculating}
             />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <button
+                onClick={() => {
+                  const base = result.geocodedPoints!.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }));
+                  if (base.length < 2) { toast.error('Rota incompleta.'); return; }
+                  const full: ExportPoint[] = [base[0], ...base.slice(1, -1), ...driverWaypoints, base[base.length - 1]];
+                  const gmapsUrl = buildGoogleMapsUrlFromRoute(full, result.routeCoordinates);
+                  window.open(gmapsUrl, '_blank', 'noopener,noreferrer');
+                  toast.success('Abrindo Google Maps travado na rota do caminhão…');
+                }}
+                className="flex items-center justify-center gap-2 py-3 px-3 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold shadow-lg active:scale-[0.98] transition"
+              >
+                <Navigation size={18} />
+                Navegar (Google Maps)
+              </button>
+              <button
+                onClick={() => {
+                  const base = result.geocodedPoints!.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }));
+                  if (base.length < 2) { toast.error('Rota incompleta.'); return; }
+                  const full: ExportPoint[] = [base[0], ...base.slice(1, -1), ...driverWaypoints, base[base.length - 1]];
+                  window.open(buildHereWeGoTruckUrl(full), '_blank', 'noopener,noreferrer');
+                  toast.success('Abrindo HERE WeGo (modo caminhão)…');
+                }}
+                className="flex items-center justify-center gap-2 py-3 px-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold shadow-lg active:scale-[0.98] transition"
+              >
+                <Truck size={18} />
+                Navegar (HERE Caminhão)
+              </button>
+            </div>
             <button
               onClick={() => {
                 const base = result.geocodedPoints!.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }));
-                if (base.length < 2) {
-                  toast.error('Rota incompleta: origem e destino são necessários.');
-                  return;
-                }
+                if (base.length < 2) { toast.error('Rota incompleta.'); return; }
                 const origin = base[0];
                 const destination = base[base.length - 1];
                 const middle = base.slice(1, -1);
                 const full: ExportPoint[] = [origin, ...middle, ...driverWaypoints, destination];
-                const hereUrl = buildHereWeGoUrl(full);
+                const gmapsUrl = buildGoogleMapsUrlFromRoute(full, result.routeCoordinates);
+                const hereUrl = buildHereWeGoTruckUrl(full);
                 const distancia = result.totalDistanceKm.toLocaleString('pt-BR');
                 const paradas = full
                   .map((p, i) => {
@@ -283,16 +310,18 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
                 const msg =
                   `🚚 *Rota pronta para navegação*\n\n${paradas}\n\n` +
                   `📏 Distância total: ${distancia} km\n\n` +
-                  `🗺️ Abrir no HERE WeGo:\n${hereUrl}`;
+                  `🗺️ *Google Maps* (travado na rota do caminhão):\n${gmapsUrl}\n\n` +
+                  `🚛 *HERE WeGo* (modo caminhão, respeita restrições):\n${hereUrl}`;
                 const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
                 window.open(waUrl, '_blank', 'noopener,noreferrer');
-                toast.success('Abrindo WhatsApp com o link da rota…');
+                toast.success('Abrindo WhatsApp com os links da rota…');
               }}
               className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-gradient-to-r from-green-500 to-green-600 text-white font-bold shadow-lg hover:shadow-xl active:scale-[0.98] transition"
             >
-              <Navigation size={18} />
+              <MessageCircle size={18} />
               Compartilhar rota no WhatsApp
             </button>
+
           </div>
         )}
 
