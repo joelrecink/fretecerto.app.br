@@ -168,13 +168,13 @@ serve(async (req) => {
     }
 
     const {
-      origins, destinations, axles,
+      origins, destinations, waypoints, axles,
       cargoCapacity, vehicleWeight, vehicleHeight, vehicleWidth, vehicleLength,
     } = await req.json() as RouteRequest;
 
-    console.log('Calculating route', { user: user.id, axles, cargoCapacity });
+    console.log('Calculating route', { user: user.id, axles, cargoCapacity, waypoints: waypoints?.length ?? 0 });
 
-    const allPoints = [...origins, ...destinations];
+    const allPoints = [...origins, ...(waypoints ?? []), ...destinations];
     if (allPoints.length < 2) throw new Error('At least 2 points required');
 
     // ---- Vehicle defaults ----
