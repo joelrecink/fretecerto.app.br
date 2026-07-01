@@ -107,7 +107,12 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
       onPointsChange?.(nextPoints, nextWaypoints);
-    }, 800);
+    }, 500);
+  };
+
+  const recalcNow = () => {
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    onPointsChange?.(livePoints, waypoints);
   };
 
   const handleDragEnd = (index: number, lat: number, lng: number) => {
