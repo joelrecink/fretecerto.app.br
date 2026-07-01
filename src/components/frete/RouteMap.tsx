@@ -61,8 +61,8 @@ const makePin = (color: string, label?: string) =>
     popupAnchor: [0, -38],
   });
 
-const ICON_START = makePin('#0ea5a5');
-const ICON_END = makePin('#0ea5a5');
+const ICON_START = makePin('#16a34a', 'A');
+const ICON_END = makePin('#dc2626', 'B');
 const ICON_MID = makePin('#0ea5a5');
 const ICON_WAYPOINT = makePin('#8b5cf6', 'W');
 
