@@ -33,10 +33,10 @@ const DeliveryScreen: React.FC<DeliveryScreenProps> = ({
   onBack,
   loading = false,
 }) => {
-  const handleNumericChange = (id: string, field: string, value: string) => {
-    const numValue = parseFloat(value.replace(',', '.')) || 0;
-    onUpdateDelivery(id, field, numValue);
+  const handleNumericChange = (id: string, field: string, value: number | undefined) => {
+    onUpdateDelivery(id, field, value ?? 0);
   };
+
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-[hsl(var(--background))] pb-32">
