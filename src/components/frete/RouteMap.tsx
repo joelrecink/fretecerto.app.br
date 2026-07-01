@@ -4,8 +4,7 @@ import L, { LatLngBoundsExpression } from 'leaflet';
 import { RotateCcw, Map as MapIcon, Plus, Trash2, RefreshCw, MoreVertical, X } from 'lucide-react';
 import { toGPX, toKML, toJSON, download, ExportPoint } from '@/lib/routeExport';
 
-// Builds a Google Maps universal navigation link.
-export function buildHereWeGoUrl(points: ExportPoint[]): string {
+function buildGoogleMapsFallbackUrl(points: ExportPoint[]): string {
   const valid = points.filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
   if (valid.length < 2) return 'https://www.google.com/maps';
   const origin = `${valid[0].lat.toFixed(6)},${valid[0].lng.toFixed(6)}`;
