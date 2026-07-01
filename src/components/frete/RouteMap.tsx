@@ -187,13 +187,6 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
         </div>
         <div className="flex items-center gap-1 flex-wrap justify-end">
           <button
-            onClick={() => openInHereMaps(exportPoints)}
-            title="Abrir rota no HERE WeGo"
-            className="px-2 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1"
-          >
-            <Navigation size={14} /> HERE
-          </button>
-          <button
             onClick={recalcNow}
             title="Recalcular rota agora"
             className="px-2 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1"
