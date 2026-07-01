@@ -329,8 +329,13 @@ serve(async (req) => {
         southwest: { lat: Math.min(...lats), lng: Math.min(...lngs) },
       };
 
-      summary = `HERE Truck Routing (${axles} eixos, ${Math.round(weightKg / 1000)}t)`;
-      routeWarnings.push(`✓ Rota oficial para caminhão de ${axles} eixos (restrições legais aplicadas pela HERE)`);
+      summary = `HERE Routing — perfil: ${hereProfile}`;
+      routeWarnings.push(
+        hereProfile.startsWith('truck ' + axles)
+          ? `✓ Rota oficial para caminhão de ${axles} eixos (restrições legais aplicadas pela HERE)`
+          : `⚠️ HERE não encontrou rota para o perfil exato (${axles} eixos). Traçado gerado com perfil: ${hereProfile}.`
+      );
+
 
       const result = {
         success: true,
