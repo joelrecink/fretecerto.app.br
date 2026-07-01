@@ -318,12 +318,16 @@ serve(async (req) => {
         }
       }
 
+      if (routeCoordinates.length < 2) {
+        throw new Error('HERE retornou distância, mas não retornou o traçado navegável da estrada.');
+      }
+
       totalDistanceKm = totalMeters / 1000;
       totalDurationHours = totalSeconds / 3600;
       polyline = polylineSegments.join(';');
 
-      const lats = geocodedPoints.map(p => p.lat);
-      const lngs = geocodedPoints.map(p => p.lng);
+      const lats = routeCoordinates.map(p => p[0]);
+      const lngs = routeCoordinates.map(p => p[1]);
       const bounds = {
         northeast: { lat: Math.max(...lats), lng: Math.max(...lngs) },
         southwest: { lat: Math.min(...lats), lng: Math.min(...lngs) },
@@ -406,10 +410,13 @@ serve(async (req) => {
         ttCoords.push([p.latitude, p.longitude]);
       }
     }
+    if (ttCoords.length < 2) {
+      throw new Error('TomTom retornou distância, mas não retornou o traçado navegável da estrada.');
+    }
     polyline = pts.join('|');
 
-    const lats = geocodedPoints.map(p => p.lat);
-    const lngs = geocodedPoints.map(p => p.lng);
+    const lats = ttCoords.map(p => p[0]);
+    const lngs = ttCoords.map(p => p[1]);
     const bounds = {
       northeast: { lat: Math.max(...lats), lng: Math.max(...lngs) },
       southwest: { lat: Math.min(...lats), lng: Math.min(...lngs) },

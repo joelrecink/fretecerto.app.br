@@ -98,10 +98,20 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
     originalPoints.current = points;
   }, [points]);
 
+  const navigationCoords: [number, number][] = useMemo(
+    () => (coordinates || []).filter(([lat, lng]) => Number.isFinite(lat) && Number.isFinite(lng)),
+    [coordinates],
+  );
+
+  const markerCoords: [number, number][] = useMemo(
+    () => exportPoints.map((p) => [p.lat, p.lng] as [number, number]),
+    [exportPoints],
+  );
+
   const allCoords: [number, number][] = useMemo(() => {
-    if (coordinates && coordinates.length) return coordinates;
-    return livePoints.map((p) => [p.lat, p.lng]);
-  }, [coordinates, livePoints]);
+    if (navigationCoords.length > 1) return navigationCoords;
+    return markerCoords;
+  }, [navigationCoords, markerCoords]);
 
   const bounds: LatLngBoundsExpression | null = useMemo(() => {
     if (!allCoords.length) return null;
@@ -180,6 +190,8 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
     ...waypoints,
     ...livePoints.slice(1),
   ].filter(Boolean) as ExportPoint[];
+
+  const hasNavigationRoute = navigationCoords.length > 1;
 
   const iconFor = (i: number) =>
     i === 0 ? ICON_START : i === livePoints.length - 1 ? ICON_END : ICON_MID;
@@ -285,19 +297,12 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
               maxZoom={19}
             />
             <ClickToAdd enabled={addMode} onAdd={addWaypoint} />
-            {coordinates && coordinates.length > 1 ? (
+            {hasNavigationRoute ? (
               <>
-                <Polyline positions={coordinates} pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.95 }} />
-                <Polyline positions={coordinates} pathOptions={{ color: '#16a34a', weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round' }} />
+                <Polyline positions={navigationCoords} pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }} />
+                <Polyline positions={navigationCoords} pathOptions={{ color: '#16a34a', weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round' }} />
               </>
-            ) : (
-              exportPoints.length > 1 && (
-                <Polyline
-                  positions={exportPoints.map((p) => [p.lat, p.lng]) as [number, number][]}
-                  pathOptions={{ color: '#16a34a', weight: 3, opacity: 0.7, dashArray: '6 8' }}
-                />
-              )
-            )}
+            ) : null}
             {livePoints.map((p, i) => (
               <Marker
                 key={`base-${i}-${p.address}`}
@@ -377,6 +382,11 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
             ))}
             <FitBounds bounds={bounds} />
           </MapContainer>
+        )}
+        {!hasNavigationRoute && exportPoints.length > 1 && (
+          <div className="absolute inset-x-3 bottom-3 z-[500] rounded-xl bg-white/95 border border-amber-200 px-3 py-2 text-xs font-medium text-amber-800 shadow-sm">
+            Traçado navegável ainda não carregado. Use recalcular para buscar a rota real nas estradas.
+          </div>
         )}
       </div>
       <div className="px-3 py-2 text-[11px] text-slate-500 bg-slate-50 border-t border-[hsl(var(--border))] flex items-center gap-3 flex-wrap">
