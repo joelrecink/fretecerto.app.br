@@ -56,17 +56,13 @@ const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
     }
     setLoading(true);
     lastQueryRef.current = q;
-    supabase.functions
-      .invoke('address-autocomplete', { method: 'GET' as any, body: undefined, headers: {}, ...({ } as any) })
-      .catch(() => null);
-    // Use direct GET via fetch through supabase client:
     (async () => {
       try {
         const { data, error } = await supabase.functions.invoke('address-autocomplete', {
           body: { q },
         });
         if (error) throw error;
-        if (lastQueryRef.current !== q) return; // stale
+        if (lastQueryRef.current !== q) return;
         const list: Suggestion[] = data?.suggestions || [];
         setSuggestions(list);
         setOpen(true);

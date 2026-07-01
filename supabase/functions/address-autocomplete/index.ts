@@ -31,9 +31,17 @@ serve(async (req) => {
     }
 
     const url = new URL(req.url);
-    const q = (url.searchParams.get('q') || '').trim();
-    const lat = url.searchParams.get('lat');
-    const lng = url.searchParams.get('lng');
+    let q = (url.searchParams.get('q') || '').trim();
+    let lat = url.searchParams.get('lat');
+    let lng = url.searchParams.get('lng');
+    if (!q && (req.method === 'POST' || req.method === 'PUT')) {
+      try {
+        const body = await req.json();
+        q = String(body?.q || '').trim();
+        lat = body?.lat != null ? String(body.lat) : lat;
+        lng = body?.lng != null ? String(body.lng) : lng;
+      } catch { /* ignore */ }
+    }
 
     if (q.length < 3 || q.length > 200 || !ALLOWED.test(q)) {
       return new Response(JSON.stringify({ suggestions: [] }), {
