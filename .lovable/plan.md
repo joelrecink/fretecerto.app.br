@@ -1,30 +1,17 @@
 
-## Ajuste: remover fallback para veículo pequeno
+## Diagnóstico
 
-O sistema é exclusivo para **caminhão, carreta e caçamba**. Nenhum fluxo deve calcular ou sugerir rota como carro/veículo leve.
+Log mostra: `hasPolyline=true, coords=0` em **todos** os perfis HERE. Ou seja, a API HERE está retornando strings de polyline válidas, mas nosso `decodeHerePolyline` está devolvendo array vazio. Bug no decoder de flexible polyline (provavelmente na leitura do header — versão/precision/thirdDim) que estava funcionando por acaso antes ou o formato mudou.
 
-### Alterações em `supabase/functions/calculate-route/index.ts`
+## Correção
 
-Na função `calculateHereRoute`, remover o último item do array `attempts`:
+Substituir a implementação de `decodeHerePolyline` em `supabase/functions/calculate-route/index.ts` pela **decodificadora de referência oficial da HERE** (github.com/heremaps/flexible-polyline). Ela lida corretamente com:
+- Version (bits variáveis unsigned)
+- Header packing: `precision (4 bits) | thirdDim (3 bits) | thirdDimPrec (4 bits)`
+- ThirdDim consume (elevation, level, altitude, custom) — descarta valor mas continua parsing
+- Loop bem definido usando `i < encoded.length`
 
-```ts
-{ mode: 'car', label: 'car fallback', params: {} }
-```
+Nada muda no restante do fluxo. Após decoder correto, o primeiro perfil (truck 9ax) já deve produzir traçado válido e responder 200.
 
-Assim os perfis tentados ficam apenas:
-1. Truck com eixos/peso reais do usuário
-2. Truck padrão 40t (6 eixos)
-3. Truck sem restrições dimensionais
-
-Se nenhum perfil de caminhão retornar rota navegável, o handler já responde 422 com mensagem clara ("Não foi possível calcular uma rota navegável para este veículo…"). Nada de silenciosamente cair para carro.
-
-### Verificação de outras telas
-Auditar rapidamente para confirmar que nenhum outro componente/edge function assume veículo leve:
-- `analyze-route-ai` — checar prompt/parâmetros
-- Formulários de cadastro de veículo — confirmar que só oferecem eixos/pesos de caminhão
-
-Se algum texto ou opção mencionar "carro" / "veículo leve", removê-lo. (Provavelmente já não existe, mas confirmar.)
-
-### Arquivos alterados
-- `supabase/functions/calculate-route/index.ts` (remover attempt "car fallback")
-- eventuais ajustes de labels se encontrados na auditoria
+## Arquivos
+- `supabase/functions/calculate-route/index.ts` — substituir apenas `HERE_DECODING_TABLE` + função `decodeHerePolyline`.
