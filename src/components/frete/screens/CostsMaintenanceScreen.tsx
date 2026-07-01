@@ -937,14 +937,13 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Peso Total (kg)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.vehicleWeight || ''}
-                onChange={(e) => handleInputChange('vehicleWeight', e.target.value)}
+              <NumericInput
+                value={data.vehicleWeight}
+                onChange={(v) => handleInputChange('vehicleWeight', v)}
                 placeholder={`${7500 + ((data.axles || 6) - 2) * 8000}`}
                 className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
               />
+
             </div>
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Altura (m)</label>
