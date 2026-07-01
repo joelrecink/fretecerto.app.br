@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, RefreshCw, MapPin, Fuel, DollarSign, Clock, TrendingUp, Map, MessageCircle, Lightbulb, AlertCircle, Target, Truck, FileDown } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, RefreshCw, MapPin, Fuel, DollarSign, Clock, TrendingUp, Map, MessageCircle, Lightbulb, AlertCircle, Target, Truck, FileDown, Navigation } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import RouteMap from '@/components/frete/RouteMap';
+import RouteMap, { openInHereMaps } from '@/components/frete/RouteMap';
 import type { ExportPoint } from '@/lib/routeExport';
 import { exportDriverRoutePdf } from '@/lib/tripExport';
 
