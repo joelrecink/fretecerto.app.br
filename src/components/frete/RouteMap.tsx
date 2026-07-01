@@ -379,8 +379,11 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
           </MapContainer>
         )}
       </div>
-      <div className="px-3 py-2 text-[11px] text-slate-500 bg-slate-50 border-t border-[hsl(var(--border))]">
-        Dica: clique em <b>+</b> e depois no mapa para adicionar um trecho por onde a rota deve passar. Arraste marcadores para ajustar. Recálculo automático em ~1s.
+      <div className="px-3 py-2 text-[11px] text-slate-500 bg-slate-50 border-t border-[hsl(var(--border))] flex items-center gap-3 flex-wrap">
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-emerald-600" /> Origem</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-600" /> Destino</span>
+        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-violet-600" /> Parada</span>
+        <span className="flex items-center gap-1"><span className="inline-block w-4 h-[3px] bg-emerald-600 rounded" /> Rota</span>
       </div>
     </div>
   );
