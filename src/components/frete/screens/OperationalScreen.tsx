@@ -37,10 +37,10 @@ const OperationalScreen: React.FC<OperationalScreenProps> = ({
   const [vehicleDropdownOpen, setVehicleDropdownOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const handleInputChange = (field: string, value: string) => {
-    const numValue = parseFloat(value.replace(',', '.')) || 0;
-    onUpdate(field, numValue);
+  const handleInputChange = (field: string, value: number | undefined) => {
+    onUpdate(field, value ?? 0);
   };
+
 
   const handleSave = async () => {
     if (!user) {
