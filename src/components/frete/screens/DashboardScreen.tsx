@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import RouteMap, { buildHereWeGoUrl, buildGoogleMapsUrlFromRoute, buildHereWeGoTruckUrl } from '@/components/frete/RouteMap';
-import type { ExportPoint } from '@/lib/routeExport';
+import { toGPX, download, type ExportPoint } from '@/lib/routeExport';
 import { exportDriverRoutePdf } from '@/lib/tripExport';
 
 interface RoadRestriction {
@@ -290,6 +290,24 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
                 Navegar (HERE Caminhão)
               </button>
             </div>
+            <button
+              onClick={() => {
+                const base = result.geocodedPoints!.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }));
+                if (base.length < 2) { toast.error('Rota incompleta.'); return; }
+                const full: ExportPoint[] = [base[0], ...base.slice(1, -1), ...driverWaypoints, base[base.length - 1]];
+                const coords = result.routeCoordinates && result.routeCoordinates.length > 1
+                  ? result.routeCoordinates
+                  : full.map((p) => [p.lat, p.lng] as [number, number]);
+                const gpx = toGPX(coords, full);
+                const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
+                download(`rota-fretecerto-${stamp}.gpx`, 'application/gpx+xml', gpx);
+                toast.success('GPX baixado. Importe no HERE WeGo (Coleções → Importar) ou em outro app de navegação.');
+              }}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-white border-2 border-emerald-500 text-emerald-700 font-bold shadow-sm hover:bg-emerald-50 active:scale-[0.98] transition"
+            >
+              <FileDown size={18} />
+              Baixar rota em GPX (HERE WeGo / outros)
+            </button>
             <button
               onClick={() => {
                 const base = result.geocodedPoints!.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }));
