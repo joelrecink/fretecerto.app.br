@@ -290,12 +290,12 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
                 });
                 const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-');
                 download(`rota-fretecerto-${stamp}.geojson`, 'application/geo+json', geo);
-                toast.success('GeoJSON baixado. Abra o arquivo no celular — o HERE WeGo importa o traçado direto.');
+                toast.success('GeoJSON baixado.');
               }}
               className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-white border-2 border-emerald-500 text-emerald-700 font-bold shadow-sm hover:bg-emerald-50 active:scale-[0.98] transition"
             >
               <FileDown size={18} />
-              Baixar rota GeoJSON (HERE WeGo)
+              Baixar rota GeoJSON
             </button>
             <button
               onClick={() => {
