@@ -38,23 +38,20 @@ const PickupScreen: React.FC<PickupScreenProps> = ({
   const totalWeight = pickups.reduce((acc, p) => acc + (p.weight || 0), 0);
   const isOverweight = totalWeight > cargoCapacity;
 
-  const handleNumericChange = (id: string, field: string, value: string, pickup: RoutePoint) => {
-    const numValue = parseFloat(value.replace(',', '.')) || 0;
-    
+  const handleNumericChange = (id: string, field: string, value: number | undefined, pickup: RoutePoint) => {
+    const numValue = value ?? 0;
+
     if (field === 'weight') {
-      // When weight changes, recalculate total value if valuePerTon exists
       onUpdatePickup(id, 'weight', numValue);
       if (pickup.valuePerTon && numValue > 0) {
         onUpdatePickup(id, 'value', numValue * pickup.valuePerTon);
       }
     } else if (field === 'valuePerTon') {
-      // When valuePerTon changes, recalculate total value
       onUpdatePickup(id, 'valuePerTon', numValue);
       if (pickup.weight && numValue > 0) {
         onUpdatePickup(id, 'value', pickup.weight * numValue);
       }
     } else if (field === 'value') {
-      // When value changes directly, calculate valuePerTon if weight exists
       onUpdatePickup(id, 'value', numValue);
       if (pickup.weight && pickup.weight > 0) {
         onUpdatePickup(id, 'valuePerTon', numValue / pickup.weight);
@@ -63,6 +60,7 @@ const PickupScreen: React.FC<PickupScreenProps> = ({
       onUpdatePickup(id, field, numValue);
     }
   };
+
 
   const formatCurrency = (val: number) => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
