@@ -4,16 +4,24 @@ import L, { LatLngBoundsExpression } from 'leaflet';
 import { RotateCcw, Map as MapIcon, Plus, Trash2, RefreshCw, MoreVertical, X } from 'lucide-react';
 import { toGPX, toKML, toJSON, download, ExportPoint } from '@/lib/routeExport';
 
+// Builds a Google Maps universal navigation link.
+// On Android/iOS this opens directly in the Google Maps app when installed,
+// without the "download the app" interstitial that wego.here.com shows.
+// Name kept as buildHereWeGoUrl for backward compatibility with existing imports.
 export function buildHereWeGoUrl(points: ExportPoint[]): string {
-  const segs = points
-    .filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng))
-    .map((p) => {
-      // HERE WeGo format: {label}:{lat},{lng}
-      const label = encodeURIComponent((p.address || 'Ponto').replace(/[\/:,]/g, ' ').trim()).replace(/%20/g, '+');
-      return `${label}:${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
-    });
-  if (segs.length < 2) return 'https://wego.here.com/';
-  return `https://wego.here.com/directions/mix/${segs.join('/')}`;
+  const valid = points.filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
+  if (valid.length < 2) return 'https://www.google.com/maps';
+  const origin = `${valid[0].lat.toFixed(6)},${valid[0].lng.toFixed(6)}`;
+  const destination = `${valid[valid.length - 1].lat.toFixed(6)},${valid[valid.length - 1].lng.toFixed(6)}`;
+  const mids = valid.slice(1, -1).map((p) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`);
+  const params = new URLSearchParams({
+    api: '1',
+    travelmode: 'driving',
+    origin,
+    destination,
+  });
+  if (mids.length) params.set('waypoints', mids.join('|'));
+  return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
 export function openInHereMaps(points: ExportPoint[]) {
