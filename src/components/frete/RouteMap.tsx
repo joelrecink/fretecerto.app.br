@@ -4,8 +4,7 @@ import L, { LatLngBoundsExpression } from 'leaflet';
 import { RotateCcw, Map as MapIcon, Plus, Trash2, RefreshCw, MoreVertical, X } from 'lucide-react';
 import { toGPX, toKML, toJSON, download, ExportPoint } from '@/lib/routeExport';
 
-// Builds a Google Maps universal navigation link.
-export function buildHereWeGoUrl(points: ExportPoint[]): string {
+function buildGoogleMapsFallbackUrl(points: ExportPoint[]): string {
   const valid = points.filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
   if (valid.length < 2) return 'https://www.google.com/maps';
   const origin = `${valid[0].lat.toFixed(6)},${valid[0].lng.toFixed(6)}`;
@@ -86,7 +85,7 @@ export function buildGoogleMapsUrlFromRoute(
   maxWaypoints = 3,
 ): string {
   const valid = points.filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
-  if (valid.length < 2) return buildHereWeGoUrl(points);
+  if (valid.length < 2) return buildGoogleMapsFallbackUrl(points);
   const origin = valid[0];
   const destination = valid[valid.length - 1];
   const userMids = valid.slice(1, -1);
@@ -120,38 +119,6 @@ export function buildGoogleMapsUrlFromRoute(
 }
 
 
-
-// Link do HERE WeGo em modo caminhão (respeita restrições de eixos/altura/peso).
-export function buildHereWeGoTruckUrl(points: ExportPoint[]): string {
-  const valid = points.filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
-  if (valid.length < 2) return 'https://wego.here.com';
-  const segs = valid.map(
-    (p, i) =>
-      `${p.lat.toFixed(6)},${p.lng.toFixed(6)},${encodeURIComponent(
-        p.address || (i === 0 ? 'Origem' : i === valid.length - 1 ? 'Destino' : `Parada ${i}`),
-      )}`,
-  );
-  return `https://wego.here.com/directions/mix/${segs.join('/')}?m=t`;
-}
-
-export function openInHereMaps(points: ExportPoint[]) {
-  const url = buildHereWeGoUrl(points);
-  const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad/i.test(navigator.userAgent);
-  if (isMobile) {
-    // Try app deep link; fall back to web after short delay
-    const fallback = window.setTimeout(() => {
-      window.open(url, '_blank');
-    }, 800);
-    try {
-      window.location.href = url.replace('https://', 'heremaps://');
-    } catch {
-      window.clearTimeout(fallback);
-      window.open(url, '_blank');
-    }
-  } else {
-    window.open(url, '_blank');
-  }
-}
 
 const TILE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/here-tile-proxy?z={z}&x={x}&y={y}`;
 
