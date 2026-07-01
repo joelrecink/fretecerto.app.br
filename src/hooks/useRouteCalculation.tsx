@@ -46,7 +46,8 @@ interface UseRouteCalculationReturn {
     pickups: RoutePoint[],
     deliveries: RoutePoint[],
     axles: number,
-    cargoCapacity?: number
+    cargoCapacity?: number,
+    waypoints?: RoutePoint[]
   ) => Promise<RouteCalculationResult | null>;
   loading: boolean;
   error: string | null;
