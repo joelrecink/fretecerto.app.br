@@ -288,13 +288,13 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
             {coordinates && coordinates.length > 1 ? (
               <>
                 <Polyline positions={coordinates} pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.95 }} />
-                <Polyline positions={coordinates} pathOptions={{ color: '#1d6cff', weight: 6, opacity: 1 }} />
+                <Polyline positions={coordinates} pathOptions={{ color: '#16a34a', weight: 6, opacity: 1, lineCap: 'round', lineJoin: 'round' }} />
               </>
             ) : (
               exportPoints.length > 1 && (
                 <Polyline
                   positions={exportPoints.map((p) => [p.lat, p.lng]) as [number, number][]}
-                  pathOptions={{ color: '#94a3b8', weight: 3, opacity: 0.8, dashArray: '6 8' }}
+                  pathOptions={{ color: '#16a34a', weight: 3, opacity: 0.7, dashArray: '6 8' }}
                 />
               )
             )}
