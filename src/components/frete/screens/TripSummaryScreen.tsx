@@ -136,6 +136,16 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
           </div>
         </div>
 
+        {/* Print summary button */}
+        <button
+          onClick={handlePrintSummary}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-sm transition-colors"
+        >
+          <Printer size={18} />
+          Imprimir Resumo (PDF)
+        </button>
+
+
         {/* AI Credits Info */}
         <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-2xl p-4">
           <div className="flex items-center justify-between">
