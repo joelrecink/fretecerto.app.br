@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, Loader2, MapPin } from 'lucide-react';
+import { Check, Loader2, MapPin, Mic, MicOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useSpeechToText } from '@/hooks/useSpeechToText';
 
 interface Suggestion {
   id: string;
@@ -18,6 +19,8 @@ interface AddressAutocompleteProps {
   placeholder?: string;
   accent?: 'emerald' | 'blue';
   rightSlot?: React.ReactNode;
+  /** Enable microphone for voice dictation of the address. */
+  enableVoice?: boolean;
 }
 
 const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
@@ -28,7 +31,9 @@ const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
   placeholder,
   accent = 'emerald',
   rightSlot,
+  enableVoice = false,
 }) => {
+
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -82,6 +87,16 @@ const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
     debounceRef.current = window.setTimeout(() => fetchSuggestions(text), 300);
   };
 
+  const speech = useSpeechToText({
+    lang: 'pt-BR',
+    onResult: (text) => {
+      if (!text) return;
+      onTextChange(text);
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      fetchSuggestions(text);
+    },
+  });
+
   const handleSelect = (s: Suggestion) => {
     onSelect(s.label, s.lat, s.lng);
     setOpen(false);
@@ -95,6 +110,7 @@ const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
     else if (e.key === 'Enter') { e.preventDefault(); handleSelect(suggestions[highlight]); }
     else if (e.key === 'Escape') { setOpen(false); }
   };
+
 
   return (
     <div ref={wrapRef} className="relative">
@@ -115,8 +131,24 @@ const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
           </span>
         )}
         {loading && <Loader2 size={16} className="animate-spin text-[hsl(var(--muted-foreground))]" />}
+        {enableVoice && speech.supported && (
+          <button
+            type="button"
+            onClick={speech.toggle}
+            title={speech.isListening ? 'Parar gravação' : 'Ditar endereço por voz'}
+            aria-label={speech.isListening ? 'Parar gravação' : 'Ditar endereço por voz'}
+            className={`p-1.5 rounded-lg transition-all ${
+              speech.isListening
+                ? 'bg-red-500 text-white animate-pulse'
+                : `text-[hsl(var(--muted-foreground))] hover:${accent === 'blue' ? 'text-blue-600' : 'text-emerald-600'}`
+            }`}
+          >
+            {speech.isListening ? <MicOff size={18} /> : <Mic size={18} />}
+          </button>
+        )}
         {rightSlot}
       </div>
+
 
       {open && suggestions.length > 0 && (
         <ul className="absolute z-50 left-0 right-0 mt-1 bg-white border border-[hsl(var(--border))] rounded-xl shadow-lg max-h-72 overflow-auto">

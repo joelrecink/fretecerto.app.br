@@ -3,6 +3,8 @@ import { Wrench, Car, Droplets, Shield, ArrowLeft, ArrowRight, Check, Cog, Save,
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 import type { SavedVehicle } from '@/hooks/useVehicles';
+import NumericInput from '../NumericInput';
+
 
 interface CostsData {
   licensePlate?: string;
@@ -100,10 +102,10 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
   const [vehicleDropdownOpen, setVehicleDropdownOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const handleInputChange = (field: string, value: string) => {
-    const numValue = parseFloat(value.replace(',', '.')) || 0;
-    onUpdate(field, numValue);
+  const handleInputChange = (field: string, value: number | undefined) => {
+    onUpdate(field, value ?? 0);
   };
+
 
   const formatCurrency = (val: number | undefined) => {
     if (!val) return 'R$ 0,00';
@@ -300,14 +302,12 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
             <label className="block text-sm font-semibold text-[hsl(var(--foreground))]">
               Hodômetro Atual (km)
             </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={data.currentOdometer || ''}
-              onChange={(e) => handleInputChange('currentOdometer', e.target.value)}
+            <NumericInput
+                        value={data.currentOdometer}
+                        onChange={(v) => handleInputChange('currentOdometer', v)}
               placeholder="Ex: 450000"
               className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-            />
+                      />
           </div>
 
           {/* Cost Summary Cards */}
@@ -364,11 +364,9 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                     <label className="block text-xs font-semibold text-[hsl(var(--foreground))] uppercase">Preço Médio (R$)</label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={data.refTirePriceNew || ''}
-                        onChange={(e) => handleInputChange('refTirePriceNew', e.target.value)}
+                      <NumericInput
+                        value={data.refTirePriceNew}
+                        onChange={(v) => handleInputChange('refTirePriceNew', v)}
                         placeholder="3500"
                         className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                       />
@@ -376,14 +374,12 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                   </div>
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold text-[hsl(var(--foreground))] uppercase">Vida Útil (KM)</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={data.refTireLifespanNew || ''}
-                      onChange={(e) => handleInputChange('refTireLifespanNew', e.target.value)}
+                    <NumericInput
+                        value={data.refTireLifespanNew}
+                        onChange={(v) => handleInputChange('refTireLifespanNew', v)}
                       placeholder="100000"
                       className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                    />
+                      />
                   </div>
                 </div>
 
@@ -428,11 +424,9 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                     <label className="block text-xs font-semibold text-[hsl(var(--foreground))] uppercase">Preço Médio (R$)</label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={data.refTirePriceRemold || ''}
-                        onChange={(e) => handleInputChange('refTirePriceRemold', e.target.value)}
+                      <NumericInput
+                        value={data.refTirePriceRemold}
+                        onChange={(v) => handleInputChange('refTirePriceRemold', v)}
                         placeholder="1800"
                         className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                       />
@@ -440,14 +434,12 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                   </div>
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold text-[hsl(var(--foreground))] uppercase">Vida Útil (KM)</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={data.refTireLifespanRemold || ''}
-                      onChange={(e) => handleInputChange('refTireLifespanRemold', e.target.value)}
+                    <NumericInput
+                        value={data.refTireLifespanRemold}
+                        onChange={(v) => handleInputChange('refTireLifespanRemold', v)}
                       placeholder="60000"
                       className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                    />
+                      />
                   </div>
                 </div>
 
@@ -526,24 +518,20 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Intervalo (KM)</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={data.oilChangeIntervalKm || ''}
-                      onChange={(e) => handleInputChange('oilChangeIntervalKm', e.target.value)}
+                    <NumericInput
+                        value={data.oilChangeIntervalKm}
+                        onChange={(v) => handleInputChange('oilChangeIntervalKm', v)}
                       placeholder="20000"
                       className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                    />
+                      />
                   </div>
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Custo Troca (R$)</label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={data.lastOilChangeCost || ''}
-                        onChange={(e) => handleInputChange('lastOilChangeCost', e.target.value)}
+                      <NumericInput
+                        value={data.lastOilChangeCost}
+                        onChange={(v) => handleInputChange('lastOilChangeCost', v)}
                         placeholder="1500"
                         className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                       />
@@ -553,13 +541,11 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Última Troca (KM)</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={data.lastOilChangeKm || ''}
-                      onChange={(e) => handleInputChange('lastOilChangeKm', e.target.value)}
+                    <NumericInput
+                        value={data.lastOilChangeKm}
+                        onChange={(v) => handleInputChange('lastOilChangeKm', v)}
                       className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                    />
+                      />
                   </div>
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Data</label>
@@ -577,24 +563,20 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Intervalo (KM)</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={data.transOilChangeIntervalKm || ''}
-                      onChange={(e) => handleInputChange('transOilChangeIntervalKm', e.target.value)}
+                    <NumericInput
+                        value={data.transOilChangeIntervalKm}
+                        onChange={(v) => handleInputChange('transOilChangeIntervalKm', v)}
                       placeholder="100000"
                       className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                    />
+                      />
                   </div>
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Custo Troca (R$)</label>
                     <div className="relative">
                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        value={data.lastTransOilChangeCost || ''}
-                        onChange={(e) => handleInputChange('lastTransOilChangeCost', e.target.value)}
+                      <NumericInput
+                        value={data.lastTransOilChangeCost}
+                        onChange={(v) => handleInputChange('lastTransOilChangeCost', v)}
                         placeholder="2500"
                         className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                       />
@@ -604,13 +586,11 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Última Troca (KM)</label>
-                    <input
-                      type="text"
-                      inputMode="decimal"
-                      value={data.lastTransOilChangeKm || ''}
-                      onChange={(e) => handleInputChange('lastTransOilChangeKm', e.target.value)}
+                    <NumericInput
+                        value={data.lastTransOilChangeKm}
+                        onChange={(v) => handleInputChange('lastTransOilChangeKm', v)}
                       className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                    />
+                      />
                   </div>
                   <div className="space-y-2">
                     <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Data</label>
@@ -637,27 +617,23 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Intervalo (KM)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.filterChangeIntervalKm || ''}
-                onChange={(e) => handleInputChange('filterChangeIntervalKm', e.target.value)}
+              <NumericInput
+                        value={data.filterChangeIntervalKm}
+                        onChange={(v) => handleInputChange('filterChangeIntervalKm', v)}
                 placeholder="20000"
                 className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-              />
+                      />
             </div>
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Custo do Kit (R$)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.lastFilterChangeCost || ''}
-                  onChange={(e) => handleInputChange('lastFilterChangeCost', e.target.value)}
+                <NumericInput
+                        value={data.lastFilterChangeCost}
+                        onChange={(v) => handleInputChange('lastFilterChangeCost', v)}
                   placeholder="800"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
+                      />
               </div>
             </div>
           </div>
@@ -678,27 +654,23 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
               <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Valor do Veículo (R$)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.assetValue || ''}
-                  onChange={(e) => handleInputChange('assetValue', e.target.value)}
+                <NumericInput
+                        value={data.assetValue}
+                        onChange={(v) => handleInputChange('assetValue', v)}
                   placeholder="450000"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
+                      />
               </div>
             </div>
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Depreciação Anual (%)</label>
               <div className="relative">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.annualDepreciationRate || ''}
-                  onChange={(e) => handleInputChange('annualDepreciationRate', e.target.value)}
+                <NumericInput
+                        value={data.annualDepreciationRate}
+                        onChange={(v) => handleInputChange('annualDepreciationRate', v)}
                   placeholder="15"
                   className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
+                      />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">%</span>
               </div>
             </div>
@@ -716,14 +688,12 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
             <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Salário Base Mensal (R$)</label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.driverSalaryMonthly || ''}
-                onChange={(e) => handleInputChange('driverSalaryMonthly', e.target.value)}
+              <NumericInput
+                        value={data.driverSalaryMonthly}
+                        onChange={(v) => handleInputChange('driverSalaryMonthly', v)}
                 placeholder="3500"
                 className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-              />
+                      />
             </div>
           </div>
 
@@ -748,14 +718,13 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
               Encargos sobre a folha (%)
             </label>
             <div className="relative">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.payrollChargesPercentage ?? ''}
-                onChange={(e) => handleInputChange('payrollChargesPercentage', e.target.value)}
+              <NumericInput
+                value={data.payrollChargesPercentage}
+                onChange={(v) => handleInputChange('payrollChargesPercentage', v)}
                 placeholder="0"
                 className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
               />
+
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">%</span>
             </div>
             <p className="text-xs text-[hsl(var(--muted-foreground))]">
@@ -775,14 +744,12 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Custo Anual (R$)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.insuranceYearly || ''}
-                  onChange={(e) => handleInputChange('insuranceYearly', e.target.value)}
+                <NumericInput
+                        value={data.insuranceYearly}
+                        onChange={(v) => handleInputChange('insuranceYearly', v)}
                   placeholder="15000"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
+                      />
               </div>
               <p className="text-xs text-blue-600 font-medium">
                 = R$ {((data.insuranceYearly || 0) / 365).toFixed(2)}/dia
@@ -799,14 +766,12 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Custo Anual (R$)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.registrationYearly || ''}
-                  onChange={(e) => handleInputChange('registrationYearly', e.target.value)}
+                <NumericInput
+                        value={data.registrationYearly}
+                        onChange={(v) => handleInputChange('registrationYearly', v)}
                   placeholder="8000"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
+                      />
               </div>
               <p className="text-xs text-blue-600 font-medium">
                 = R$ {((data.registrationYearly || 0) / 365).toFixed(2)}/dia
@@ -830,56 +795,48 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Estacionamento (R$/mês)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.parkingMonthly || ''}
-                  onChange={(e) => handleInputChange('parkingMonthly', e.target.value)}
+                <NumericInput
+                        value={data.parkingMonthly}
+                        onChange={(v) => handleInputChange('parkingMonthly', v)}
                   placeholder="500"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
+                      />
               </div>
             </div>
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Rastreador (R$/mês)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.trackingMonthly || ''}
-                  onChange={(e) => handleInputChange('trackingMonthly', e.target.value)}
+                <NumericInput
+                        value={data.trackingMonthly}
+                        onChange={(v) => handleInputChange('trackingMonthly', v)}
                   placeholder="150"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
+                      />
               </div>
             </div>
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Contador (R$/mês)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.accountingMonthly || ''}
-                  onChange={(e) => handleInputChange('accountingMonthly', e.target.value)}
+                <NumericInput
+                        value={data.accountingMonthly}
+                        onChange={(v) => handleInputChange('accountingMonthly', v)}
                   placeholder="300"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
+                      />
               </div>
             </div>
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Outros Fixos (R$/mês)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.otherFixedMonthly || ''}
-                  onChange={(e) => handleInputChange('otherFixedMonthly', e.target.value)}
+                <NumericInput
+                        value={data.otherFixedMonthly}
+                        onChange={(v) => handleInputChange('otherFixedMonthly', v)}
                   placeholder="0"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
+                      />
               </div>
             </div>
           </div>
@@ -933,14 +890,13 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Percentual ARDA (%)</label>
                 <div className="relative">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    value={data.ardaPercentage || 30}
-                    onChange={(e) => handleInputChange('ardaPercentage', e.target.value)}
+                  <NumericInput
+                    value={data.ardaPercentage ?? 30}
+                    onChange={(v) => handleInputChange('ardaPercentage', v)}
                     placeholder="30"
                     className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                   />
+
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">%</span>
                 </div>
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">Padrão: 30% sobre horas extras</p>
@@ -949,14 +905,13 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Horas de espera / dia</label>
                 <div className="relative">
-                  <input
-                    type="text"
-                    inputMode="decimal"
+                  <NumericInput
                     value={data.estimatedWaitHoursPerDay ?? 2}
-                    onChange={(e) => handleInputChange('estimatedWaitHoursPerDay', e.target.value)}
+                    onChange={(v) => handleInputChange('estimatedWaitHoursPerDay', v)}
                     placeholder="2"
                     className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                   />
+
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">h</span>
                 </div>
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">Estimativa carga/descarga</p>
@@ -982,47 +937,41 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Peso Total (kg)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.vehicleWeight || ''}
-                onChange={(e) => handleInputChange('vehicleWeight', e.target.value)}
+              <NumericInput
+                value={data.vehicleWeight}
+                onChange={(v) => handleInputChange('vehicleWeight', v)}
                 placeholder={`${7500 + ((data.axles || 6) - 2) * 8000}`}
                 className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
               />
+
             </div>
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Altura (m)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.vehicleHeight || ''}
-                onChange={(e) => handleInputChange('vehicleHeight', e.target.value)}
+              <NumericInput
+                        value={data.vehicleHeight}
+                        onChange={(v) => handleInputChange('vehicleHeight', v)}
                 placeholder="4.0"
                 className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-              />
+                      />
             </div>
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Largura (m)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.vehicleWidth || ''}
-                onChange={(e) => handleInputChange('vehicleWidth', e.target.value)}
+              <NumericInput
+                        value={data.vehicleWidth}
+                        onChange={(v) => handleInputChange('vehicleWidth', v)}
                 placeholder="2.55"
                 className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-              />
+                      />
             </div>
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Comprimento (m)</label>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.vehicleLength || ''}
-                onChange={(e) => handleInputChange('vehicleLength', e.target.value)}
+              <NumericInput
+                value={data.vehicleLength}
+                onChange={(v) => handleInputChange('vehicleLength', v)}
                 placeholder={`${(data.axles || 6) <= 4 ? '14' : (data.axles || 6) <= 6 ? '18.15' : '19.8'}`}
                 className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
               />
+
             </div>
           </div>
         </div>
@@ -1042,42 +991,36 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Graxa (R$/km)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.greaseCostPerKm || ''}
-                  onChange={(e) => handleInputChange('greaseCostPerKm', e.target.value)}
+                <NumericInput
+                        value={data.greaseCostPerKm}
+                        onChange={(v) => handleInputChange('greaseCostPerKm', v)}
                   placeholder="0.01"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
+                      />
               </div>
             </div>
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Lavagem (R$/km)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.washingCostPerKm || ''}
-                  onChange={(e) => handleInputChange('washingCostPerKm', e.target.value)}
+                <NumericInput
+                        value={data.washingCostPerKm}
+                        onChange={(v) => handleInputChange('washingCostPerKm', v)}
                   placeholder="0.02"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
+                      />
               </div>
             </div>
             <div className="space-y-2">
               <label className="block text-xs font-semibold text-[hsl(var(--muted-foreground))] uppercase">Outros (R$/km)</label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] text-sm">R$</span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={data.otherMaintenanceCostPerKm || ''}
-                  onChange={(e) => handleInputChange('otherMaintenanceCostPerKm', e.target.value)}
+                <NumericInput
+                        value={data.otherMaintenanceCostPerKm}
+                        onChange={(v) => handleInputChange('otherMaintenanceCostPerKm', v)}
                   placeholder="0.05"
                   className="w-full pl-10 pr-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
-                />
+                      />
               </div>
             </div>
           </div>
