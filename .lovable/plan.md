@@ -1,83 +1,48 @@
-## Mapa interativo com edição de coordenadas e exportação
+## Objetivo
 
-Substituir o PNG estático por um mapa interativo Leaflet com traçado completo da rota, permitir ao usuário **arrastar marcadores** (ou editar lat/lng) para corrigir pontos, **recalcular automaticamente** distância/pedágio/custos, e **exportar** mapa+coordenadas (PNG + GPX/KML/JSON).
+Substituir os inputs de endereço em **Coleta** e **Entrega** por um autocomplete que sugere endereços reais enquanto o usuário digita. Ao selecionar uma sugestão, o endereço fica com formato válido + `lat/lng` já preenchidos, eliminando erros como "Vrihft" e economizando chamadas de geocoding no `calculate-route`.
 
-### Backend
+## Provider
 
-**`supabase/functions/calculate-route/index.ts`**
-- Decodificar a flexible polyline da HERE no edge function (porta TS do algoritmo público, ~40 linhas, sem deps).
-- Retornar novo campo `routeCoordinates: [lat, lng][]` (todas as seções concatenadas) além do `polyline` atual.
-- Aceitar pontos já com `lat`/`lng` (skip do geocoding) — já suportado; garantir que recálculos disparados por arraste reusem coordenadas em vez de re-geocodificar.
-- Fallback TomTom: converter `route.legs[].points` no mesmo formato `[lat, lng][]`.
+**HERE Autosuggest API** (`https://autosuggest.search.hereapi.com/v1/autosuggest`).
+- Motivo: já temos `HERE_API_KEY` configurada e o HERE é o provedor principal de rota/pedágio; usar o mesmo motor evita divergência entre endereço sugerido e endereço geocodificado depois.
+- Filtro por Brasil (`in=countryCode:BRA`), idioma `pt-BR`, `limit=6`.
+- Chave server-side protegida por edge function proxy — nunca exposta no bundle.
 
-**Novo: `supabase/functions/here-tile-proxy/index.ts`**
-- Proxy `{z}/{x}/{y}` → `https://maps.hereapi.com/v3/base/mc/{z}/{x}/{y}/png8?apiKey=...&style=explore.day&size=512`.
-- Mantém `HERE_API_KEY` server-side. `Cache-Control: public, max-age=86400`.
-- `verify_jwt = false` (tiles são públicos por natureza, key fica protegida).
+## Arquitetura
 
-**`get-route-map/index.ts`**: mantido como fallback de exportação server-side (PNG bbox+markers).
+**Nova edge function `address-autocomplete`** (`supabase/functions/address-autocomplete/index.ts`):
+- `GET ?q=<texto>&lat=<opt>&lng=<opt>`
+- Requer JWT (mesmo padrão de `calculate-route`).
+- Valida `q` (mínimo 3 caracteres, máximo 200, regex de caracteres permitidos).
+- Chama HERE Autosuggest, retorna array normalizado: `{ id, label, address, lat, lng }`.
+- Cache de 60s via header `Cache-Control` para reduzir custo.
 
-### Frontend
+**Novo componente `src/components/frete/AddressAutocomplete.tsx`**:
+- Props: `value`, `onChange(address, coords?)`, `placeholder`, `id`.
+- Input controlado + dropdown com sugestões (usa componentes `Command`/`Popover` do shadcn, já disponíveis).
+- Debounce de 300 ms antes de chamar a edge function.
+- Teclado: setas ↑↓ para navegar, Enter para selecionar, Esc para fechar.
+- Ao selecionar: chama `onChange(item.label, { lat, lng })` e fecha o dropdown.
+- Mostra estado "buscando…" e "nenhum resultado".
 
-**Instalar:** `bun add leaflet react-leaflet @types/leaflet leaflet-image`
-(`leaflet-image` gera PNG client-side para exportação que respeita o estado atual do mapa.)
+**Integração nas telas**:
+- `PickupScreen.tsx` e `DeliveryScreen.tsx`: trocar o `<Input>` do endereço pelo `<AddressAutocomplete>`.
+- `Index.tsx` (`onUpdatePickup`/`onUpdateDelivery`): aceitar `coords` opcional e gravar `lat`/`lng` no item de rota — o `useRouteCalculation` já envia esses campos para o backend quando presentes, então o `calculate-route` pula o geocode.
+- Se o usuário editar o texto depois de ter selecionado uma sugestão, limpar `lat`/`lng` (força nova seleção ou fallback para geocode).
 
-**Novo: `src/components/frete/RouteMap.tsx`**
-- `<MapContainer>` (react-leaflet) com:
-  - `TileLayer` → edge function `here-tile-proxy`.
-  - `Polyline` com `routeCoordinates`.
-  - `Marker`s **draggable**: verde (origens), azul (intermediários), vermelho (destinos). Popup mostra endereço + lat/lng editáveis (inputs numéricos).
-  - `fitBounds` automático no carregamento.
-- Props: `coordinates`, `points`, `onPointChange(index, lat, lng)`.
-- Debounce de 800ms ao arrastar/editar antes de disparar `onPointChange` (evita recálculos em rajada).
-- Toolbar do mapa:
-  - **Exportar PNG** (leaflet-image do estado atual).
-  - **Exportar GPX** / **KML** / **JSON** (gerados client-side a partir de `routeCoordinates` + `points`).
-  - **Resetar coordenadas** (volta para as geocodificadas originais).
+## Comportamento e UX
 
-**Novo: `src/lib/routeExport.ts`**
-- `toGPX(coords, points)`, `toKML(...)`, `toJSON(...)` → strings.
-- `download(filename, mime, content)` helper (Blob + `<a download>`).
+- Digitação livre continua permitida (não bloquear submit se o usuário não escolher sugestão) — o backend fará geocode como fallback.
+- Um badge verde discreto ("✓ endereço confirmado") aparece quando `lat/lng` está preenchido, indicando que aquele endereço não vai gastar geocoding extra.
+- Sem alterações em cores/tipografia/layout: reaproveita tokens existentes.
 
-**`src/types.ts`**
-- `SimulationResult` (ou tipo de rota): adicionar `routeCoordinates?: [number, number][]`.
-- `GeocodedPoint`: já tem `address/lat/lng`; adicionar `editedByUser?: boolean` para indicar override manual.
+## Arquivos
 
-**`src/hooks/useRouteCalculation.tsx`**
-- Propagar `routeCoordinates`.
-- Nova função `recalculateWithEditedPoints(points)`: aceita pontos com lat/lng já definidos, envia direto ao edge function (sem re-geocodificar), retorna novo resultado.
+- Novo: `supabase/functions/address-autocomplete/index.ts`
+- Novo: `src/components/frete/AddressAutocomplete.tsx`
+- Editado: `src/components/frete/screens/PickupScreen.tsx`
+- Editado: `src/components/frete/screens/DeliveryScreen.tsx`
+- Editado: `src/pages/Index.tsx` (handler aceita `coords` e limpa ao editar texto)
 
-**`src/components/frete/screens/DashboardScreen.tsx`** (ou `Dashboard.tsx`)
-- Substituir `<img src=".../get-route-map">` por `<RouteMap ... />`.
-- Handler `onPointChange` chama `recalculateWithEditedPoints` → atualiza `result` global.
-- Loading spinner sobre o mapa durante recálculo.
-- Após recálculo, **`handleCalculate` do `Index.tsx` (ou hook de custos) reexecuta** com nova `totalDistanceKm`, `totalDurationHours`, `estimatedTollCost` — isso refaz combustível, comissão, manutenção, custos fixos proporcionais, ARDA, retorno vazio etc., e o Dashboard re-renderiza com os novos valores.
-
-**`src/main.tsx`**
-- `import 'leaflet/dist/leaflet.css'`.
-
-### Fluxo do usuário (arrastar marcador)
-
-```text
-1. usuário arrasta marcador no mapa
-2. RouteMap dispara onPointChange (debounced 800ms)
-3. DashboardScreen chama recalculateWithEditedPoints(points atualizados)
-4. edge function HERE recalcula rota (pula geocoding, usa lat/lng diretos)
-5. retorna novo routeCoordinates + distância + pedágio
-6. handleCalculate refaz todos os custos com nova distância
-7. mapa e cards de custo atualizam juntos
-```
-
-### Detalhes técnicos
-
-- Decoder HERE flexible polyline: implementação inline em ambos edge function e — se preciso no client — em `src/lib/herePolyline.ts`.
-- Tile proxy: rota Supabase functions não suporta path params nativamente; usar query `?z=&x=&y=` na URL do `TileLayer` (`https://...functions/v1/here-tile-proxy?z={z}&x={x}&y={y}`).
-- Exportação PNG via `leaflet-image` precisa de `crossOrigin` nos tiles → proxy já devolve mesma origem.
-- Custo API: cada arraste = 1 chamada HERE Routing (~US$ 0,0008). Debounce de 800ms + botão "Aplicar alterações" alternativo para usuários que queiram editar vários pontos antes de recalcular.
-- Recálculo NÃO consome créditos do usuário (créditos só na análise de IA, já existente).
-
-### Fora de escopo
-
-- Não alterar lógica de IA, créditos, ou outras telas do fluxo de 7 passos.
-- Não remover `get-route-map` (fica como fallback de exportação server-side).
-- Edição de coordenadas não persiste no `trip_history` automaticamente — usuário ainda precisa clicar em "Salvar viagem".
+Sem novas dependências, sem alterações de schema, sem novos secrets (usa `HERE_API_KEY` existente).
