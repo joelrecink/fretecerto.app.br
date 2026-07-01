@@ -26,6 +26,60 @@ export function buildHereWeGoUrl(points: ExportPoint[]): string {
 // HERE para o perfil de caminhão, injetamos waypoints amostrados ao longo do
 // polyline navegável. Isso "trava" o Maps na rota do caminhão.
 // Limite prático de waypoints no link do Google: 9.
+// Amostragem inteligente: escolhe pontos nos maiores DESVIOS do polyline (curvas
+// e entroncamentos), usando o algoritmo Ramer-Douglas-Peucker invertido. Isso
+// "trava" o Google Maps nos pontos onde ele mais tende a sugerir atalho de carro.
+function pickDeviationPoints(
+  coords: [number, number][],
+  count: number,
+): Array<{ lat: number; lng: number }> {
+  if (coords.length <= 2 || count <= 0) return [];
+  // Perpendicular distance (approx planar — suficiente em escalas rodoviárias).
+  const perpDist = (p: [number, number], a: [number, number], b: [number, number]) => {
+    const [x, y] = [p[1], p[0]];
+    const [x1, y1] = [a[1], a[0]];
+    const [x2, y2] = [b[1], b[0]];
+    const dx = x2 - x1;
+    const dy = y2 - y1;
+    if (dx === 0 && dy === 0) return Math.hypot(x - x1, y - y1);
+    const t = ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy);
+    const px = x1 + t * dx;
+    const py = y1 + t * dy;
+    return Math.hypot(x - px, y - py);
+  };
+  // Segments as [startIdx, endIdx]; pick max-deviation index inside, split, repeat.
+  const chosen = new Set<number>();
+  const segments: Array<[number, number]> = [[0, coords.length - 1]];
+  while (chosen.size < count && segments.length) {
+    // pick segment with largest max deviation
+    let bestSegIdx = -1;
+    let bestPtIdx = -1;
+    let bestDist = -1;
+    for (let s = 0; s < segments.length; s++) {
+      const [i0, i1] = segments[s];
+      if (i1 - i0 < 2) continue;
+      const a = coords[i0];
+      const b = coords[i1];
+      for (let k = i0 + 1; k < i1; k++) {
+        if (chosen.has(k)) continue;
+        const d = perpDist(coords[k], a, b);
+        if (d > bestDist) {
+          bestDist = d;
+          bestPtIdx = k;
+          bestSegIdx = s;
+        }
+      }
+    }
+    if (bestSegIdx < 0 || bestPtIdx < 0) break;
+    chosen.add(bestPtIdx);
+    const [i0, i1] = segments[bestSegIdx];
+    segments.splice(bestSegIdx, 1, [i0, bestPtIdx], [bestPtIdx, i1]);
+  }
+  return [...chosen]
+    .sort((a, b) => a - b)
+    .map((i) => ({ lat: coords[i][0], lng: coords[i][1] }));
+}
+
 export function buildGoogleMapsUrlFromRoute(
   points: ExportPoint[],
   routeCoordinates: [number, number][] | undefined,
@@ -38,15 +92,10 @@ export function buildGoogleMapsUrlFromRoute(
   const userMids = valid.slice(1, -1);
 
   const remaining = Math.max(0, maxWaypoints - userMids.length);
-  const sampled: Array<{ lat: number; lng: number }> = [];
-  if (routeCoordinates && routeCoordinates.length > 2 && remaining > 0) {
-    const n = Math.min(remaining, routeCoordinates.length - 2);
-    for (let i = 1; i <= n; i++) {
-      const idx = Math.floor((i * (routeCoordinates.length - 1)) / (n + 1));
-      const [lat, lng] = routeCoordinates[idx];
-      if (Number.isFinite(lat) && Number.isFinite(lng)) sampled.push({ lat, lng });
-    }
-  }
+  const sampled =
+    routeCoordinates && routeCoordinates.length > 2 && remaining > 0
+      ? pickDeviationPoints(routeCoordinates, remaining)
+      : [];
 
   const fmt = (lat: number, lng: number) => `${lat.toFixed(6)},${lng.toFixed(6)}`;
   const waypoints = [
@@ -59,10 +108,17 @@ export function buildGoogleMapsUrlFromRoute(
     travelmode: 'driving',
     origin: fmt(origin.lat, origin.lng),
     destination: fmt(destination.lat, destination.lng),
+    // Força o Google a respeitar a ordem exata dos waypoints — sem reotimizar.
+    dir_action: 'navigate',
   });
-  if (waypoints.length) params.set('waypoints', waypoints.join('|'));
+  if (waypoints.length) {
+    // Prefixo "via:" impede que o Google trate como parada (evita "chegou ao
+    // destino intermediário") E ancora o traçado na rodovia amostrada.
+    params.set('waypoints', waypoints.map((w) => `via:${w}`).join('|'));
+  }
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
+
 
 // Link do HERE WeGo em modo caminhão (respeita restrições de eixos/altura/peso).
 export function buildHereWeGoTruckUrl(points: ExportPoint[]): string {
