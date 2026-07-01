@@ -107,6 +107,19 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
     onCalculate(includeReturn, estimatedReturnCost);
   };
 
+  const handlePrintSummary = () => {
+    exportTripSummaryPdf({
+      vehicle: vehicleInfo,
+      pickups: pickups.map((p) => ({ address: p.address, value: p.value, weight: p.weight })),
+      deliveries: deliveries.map((d) => ({ address: d.address, value: d.value })),
+      totalFreight,
+      estimatedDistanceKm: estimatedDistance,
+      includeReturn,
+      returnDistanceKm: returnDistance,
+      returnCost: estimatedReturnCost,
+    });
+  };
+
   return (
     <div className="min-h-[calc(100vh-64px)] bg-[hsl(var(--background))] pb-32">
       <div className="max-w-2xl mx-auto p-4 space-y-6">
