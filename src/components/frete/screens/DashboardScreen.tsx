@@ -101,11 +101,12 @@ interface SimulationResult {
 interface DashboardScreenProps {
   result: SimulationResult;
   onReset: () => void;
-  onRecalculateRoute?: (editedPoints: ExportPoint[]) => Promise<void> | void;
+  onRecalculateRoute?: (editedPoints: ExportPoint[], waypoints: ExportPoint[]) => Promise<void> | void;
   recalculating?: boolean;
 }
 
 const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset, onRecalculateRoute, recalculating }) => {
+  const [driverWaypoints, setDriverWaypoints] = useState<ExportPoint[]>([]);
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
