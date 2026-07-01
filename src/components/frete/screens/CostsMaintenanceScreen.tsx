@@ -718,14 +718,13 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
               Encargos sobre a folha (%)
             </label>
             <div className="relative">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.payrollChargesPercentage ?? ''}
-                onChange={(e) => handleInputChange('payrollChargesPercentage', e.target.value)}
+              <NumericInput
+                value={data.payrollChargesPercentage}
+                onChange={(v) => handleInputChange('payrollChargesPercentage', v)}
                 placeholder="0"
                 className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
               />
+
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">%</span>
             </div>
             <p className="text-xs text-[hsl(var(--muted-foreground))]">
