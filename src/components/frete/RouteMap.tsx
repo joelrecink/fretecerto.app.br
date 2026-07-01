@@ -88,33 +88,10 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
   };
 
   const exportPNG = async () => {
-    const map = mapRef.current;
-    if (!map) return;
-    try {
-      // dynamic import to avoid bundling if unused
-      const mod = await import('leaflet-image' /* @vite-ignore */ as string).catch(() => null);
-      if (!mod) {
-        // fallback: open native browser print of map area
-        window.print();
-        return;
-      }
-      const leafletImage = (mod as any).default || (mod as any);
-      leafletImage(map, (err: any, canvas: HTMLCanvasElement) => {
-        if (err || !canvas) return;
-        canvas.toBlob((blob) => {
-          if (!blob) return;
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'rota-frete.png';
-          a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-        });
-      });
-    } catch {
-      window.print();
-    }
+    // Fallback: use native browser print for map area (leaflet-image not bundled)
+    window.print();
   };
+
 
   const iconFor = (i: number) =>
     i === 0 ? ICON_START : i === livePoints.length - 1 ? ICON_END : ICON_MID;
