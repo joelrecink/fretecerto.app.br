@@ -112,9 +112,11 @@ export function buildGoogleMapsUrlFromRoute(
     destination: fmt(destination.lat, destination.lng),
   });
   // Waypoints sem prefixo "via:" — permitem que o Google faça pequeno snap à
-  // rua mais próxima em vez de rejeitar a rota inteira. Sem dir_action=navigate
-  // para não travar a reotimização.
+  // rua mais próxima em vez de rejeitar a rota inteira.
   if (waypoints.length) params.set('waypoints', waypoints.join('|'));
+  // dir_action=navigate faz o Google Maps abrir direto no modo de navegação
+  // (turn-by-turn) em vez da tela de pré-visualização da rota.
+  params.set('dir_action', 'navigate');
   return `https://www.google.com/maps/dir/?${params.toString()}`;
 }
 
