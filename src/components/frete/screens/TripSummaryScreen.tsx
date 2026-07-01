@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, MapPin, Navigation, ArrowLeft, Calculator, Edit3, Sparkles, RotateCcw, Info, Coins, LogIn } from 'lucide-react';
+import { Truck, MapPin, Navigation, ArrowLeft, Calculator, Edit3, Sparkles, RotateCcw, Info, Coins, LogIn, Printer } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
+import { exportTripSummaryPdf } from '@/lib/tripExport';
 
 interface RoutePoint {
   id: string;
