@@ -172,14 +172,12 @@ const OperationalScreen: React.FC<OperationalScreenProps> = ({
               Consumo Médio (km/L)
             </label>
             <div className="relative">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.fuelConsumption || ''}
-                onChange={(e) => handleInputChange('fuelConsumption', e.target.value)}
+              <NumericInput
+                        value={data.fuelConsumption}
+                        onChange={(v) => handleInputChange('fuelConsumption', v)}
                 placeholder="Ex: 2.5"
                 className="w-full px-4 py-4 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              />
+                      />
               <button className="absolute right-3 top-1/2 -translate-y-1/2 p-2 text-[hsl(var(--muted-foreground))]">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
@@ -195,14 +193,12 @@ const OperationalScreen: React.FC<OperationalScreenProps> = ({
             </label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] font-bold">R$</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.fuelPrice || ''}
-                onChange={(e) => handleInputChange('fuelPrice', e.target.value)}
+              <NumericInput
+                        value={data.fuelPrice}
+                        onChange={(v) => handleInputChange('fuelPrice', v)}
                 placeholder="6,50"
                 className="w-full pl-12 pr-4 py-4 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              />
+                      />
             </div>
           </div>
         </div>
@@ -276,14 +272,12 @@ const OperationalScreen: React.FC<OperationalScreenProps> = ({
             </label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] font-bold">Ton.</span>
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.cargoCapacity || ''}
-                onChange={(e) => handleInputChange('cargoCapacity', e.target.value)}
+              <NumericInput
+                        value={data.cargoCapacity}
+                        onChange={(v) => handleInputChange('cargoCapacity', v)}
                 placeholder="32"
                 className="w-full pl-14 pr-4 py-4 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              />
+                      />
             </div>
           </div>
         </div>
@@ -300,14 +294,12 @@ const OperationalScreen: React.FC<OperationalScreenProps> = ({
               Comissão do Motorista (%)
             </label>
             <div className="relative">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={data.driverCommissionPercentage || ''}
-                onChange={(e) => handleInputChange('driverCommissionPercentage', e.target.value)}
+              <NumericInput
+                        value={data.driverCommissionPercentage}
+                        onChange={(v) => handleInputChange('driverCommissionPercentage', v)}
                 placeholder="10"
                 className="w-full px-4 py-4 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-              />
+                      />
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))] font-bold">%</span>
             </div>
           </div>
