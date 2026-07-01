@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L, { LatLngBoundsExpression } from 'leaflet';
-import { Download, RotateCcw, Map as MapIcon, FileJson, Plus, Trash2, RefreshCw } from 'lucide-react';
+import { RotateCcw, Map as MapIcon, Plus, Trash2, RefreshCw, MoreVertical, X } from 'lucide-react';
 import { toGPX, toKML, toJSON, download, ExportPoint } from '@/lib/routeExport';
 
 export function buildHereWeGoUrl(points: ExportPoint[]): string {
