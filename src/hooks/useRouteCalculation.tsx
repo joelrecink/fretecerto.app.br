@@ -115,6 +115,10 @@ export const useRouteCalculation = (): UseRouteCalculationReturn => {
         throw new Error(data.error || 'Erro ao calcular rota');
       }
 
+      if (!Array.isArray(data.routeCoordinates) || data.routeCoordinates.length < 2) {
+        throw new Error('O provedor retornou distância, mas não retornou o traçado navegável da estrada. Recalcule a rota.');
+      }
+
       const calculationResult: RouteCalculationResult = {
         totalDistanceKm: data.totalDistanceKm,
         totalDurationHours: data.totalDurationHours,
