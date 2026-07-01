@@ -6,8 +6,13 @@ import { toGPX, toKML, toJSON, download, ExportPoint } from '@/lib/routeExport';
 
 export function buildHereWeGoUrl(points: ExportPoint[]): string {
   const segs = points
-    .filter(Boolean)
-    .map((p) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)},${encodeURIComponent(p.address || 'Ponto')}`);
+    .filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng))
+    .map((p) => {
+      // HERE WeGo format: {label}:{lat},{lng}
+      const label = encodeURIComponent((p.address || 'Ponto').replace(/[\/:,]/g, ' ').trim()).replace(/%20/g, '+');
+      return `${label}:${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
+    });
+  if (segs.length < 2) return 'https://wego.here.com/';
   return `https://wego.here.com/directions/mix/${segs.join('/')}`;
 }
 
