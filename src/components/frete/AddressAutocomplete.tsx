@@ -87,6 +87,16 @@ const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
     debounceRef.current = window.setTimeout(() => fetchSuggestions(text), 300);
   };
 
+  const speech = useSpeechToText({
+    lang: 'pt-BR',
+    onResult: (text) => {
+      if (!text) return;
+      onTextChange(text);
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+      fetchSuggestions(text);
+    },
+  });
+
   const handleSelect = (s: Suggestion) => {
     onSelect(s.label, s.lat, s.lng);
     setOpen(false);
@@ -100,6 +110,7 @@ const AddressAutocomplete: React.FC<AddressAutocompleteProps> = ({
     else if (e.key === 'Enter') { e.preventDefault(); handleSelect(suggestions[highlight]); }
     else if (e.key === 'Escape') { setOpen(false); }
   };
+
 
   return (
     <div ref={wrapRef} className="relative">
