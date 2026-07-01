@@ -85,7 +85,7 @@ export function buildGoogleMapsUrlFromRoute(
   maxWaypoints = 3,
 ): string {
   const valid = points.filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
-  if (valid.length < 2) return buildHereWeGoUrl(points);
+  if (valid.length < 2) return buildGoogleMapsFallbackUrl(points);
   const origin = valid[0];
   const destination = valid[valid.length - 1];
   const userMids = valid.slice(1, -1);
