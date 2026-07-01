@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Truck, MapPin, Navigation, ArrowLeft, Calculator, Edit3, Sparkles, RotateCcw, Info, Coins, LogIn } from 'lucide-react';
+import { Truck, MapPin, Navigation, ArrowLeft, Calculator, Edit3, Sparkles, RotateCcw, Info, Coins, LogIn, Printer } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
+import { exportTripSummaryPdf } from '@/lib/tripExport';
 
 interface RoutePoint {
   id: string;
@@ -106,6 +107,19 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
     onCalculate(includeReturn, estimatedReturnCost);
   };
 
+  const handlePrintSummary = () => {
+    exportTripSummaryPdf({
+      vehicle: vehicleInfo,
+      pickups: pickups.map((p) => ({ address: p.address, value: p.value, weight: p.weight })),
+      deliveries: deliveries.map((d) => ({ address: d.address, value: d.value })),
+      totalFreight,
+      estimatedDistanceKm: estimatedDistance,
+      includeReturn,
+      returnDistanceKm: returnDistance,
+      returnCost: estimatedReturnCost,
+    });
+  };
+
   return (
     <div className="min-h-[calc(100vh-64px)] bg-[hsl(var(--background))] pb-32">
       <div className="max-w-2xl mx-auto p-4 space-y-6">
@@ -121,6 +135,16 @@ const TripSummaryScreen: React.FC<TripSummaryScreenProps> = ({
             <p className="text-2xl font-bold text-emerald-600">{formatCurrency(totalFreight)}</p>
           </div>
         </div>
+
+        {/* Print summary button */}
+        <button
+          onClick={handlePrintSummary}
+          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-semibold text-sm transition-colors"
+        >
+          <Printer size={18} />
+          Imprimir Resumo (PDF)
+        </button>
+
 
         {/* AI Credits Info */}
         <div className="bg-gradient-to-r from-violet-50 to-purple-50 border border-violet-200 rounded-2xl p-4">

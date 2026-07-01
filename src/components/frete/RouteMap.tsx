@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L, { LatLngBoundsExpression } from 'leaflet';
-import { Download, RotateCcw, Map as MapIcon, FileJson, FileText } from 'lucide-react';
+import { Download, RotateCcw, Map as MapIcon, FileJson, Plus, Trash2 } from 'lucide-react';
 import { toGPX, toKML, toJSON, download, ExportPoint } from '@/lib/routeExport';
 
 const TILE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/here-tile-proxy?z={z}&x={x}&y={y}`;
@@ -9,16 +9,16 @@ const TILE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/here-tile-pr
 interface RouteMapProps {
   coordinates: [number, number][];
   points: ExportPoint[];
-  /** Triggered (debounced) when a marker is dragged or coords are edited. Receives ALL points. */
-  onPointsChange?: (points: ExportPoint[]) => void;
+  /** Fired (debounced) when the user drags a base marker or edits its coords. */
+  onPointsChange?: (points: ExportPoint[], waypoints: ExportPoint[]) => void;
   loading?: boolean;
 }
 
 // Colored circle div icons (no external image dependencies)
-const makeIcon = (color: string) =>
+const makeIcon = (color: string, label?: string) =>
   L.divIcon({
     className: 'route-map-marker',
-    html: `<div style="background:${color};width:22px;height:22px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);"></div>`,
+    html: `<div style="background:${color};width:22px;height:22px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:bold;">${label ?? ''}</div>`,
     iconSize: [22, 22],
     iconAnchor: [11, 11],
     popupAnchor: [0, -12],
@@ -27,6 +27,7 @@ const makeIcon = (color: string) =>
 const ICON_START = makeIcon('#10b981');
 const ICON_END = makeIcon('#ef4444');
 const ICON_MID = makeIcon('#2563eb');
+const ICON_WAYPOINT = makeIcon('#8b5cf6', 'W');
 
 function FitBounds({ bounds }: { bounds: LatLngBoundsExpression | null }) {
   const map = useMap();
@@ -36,8 +37,20 @@ function FitBounds({ bounds }: { bounds: LatLngBoundsExpression | null }) {
   return null;
 }
 
+function ClickToAdd({ onAdd, enabled }: { onAdd: (lat: number, lng: number) => void; enabled: boolean }) {
+  useMapEvents({
+    click: (e) => {
+      if (!enabled) return;
+      onAdd(e.latlng.lat, e.latlng.lng);
+    },
+  });
+  return null;
+}
+
 const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange, loading }) => {
   const [livePoints, setLivePoints] = useState<ExportPoint[]>(points);
+  const [waypoints, setWaypoints] = useState<ExportPoint[]>([]);
+  const [addMode, setAddMode] = useState(false);
   const originalPoints = useRef<ExportPoint[]>(points);
   const debounceRef = useRef<number | null>(null);
   const mapRef = useRef<L.Map | null>(null);
@@ -62,36 +75,68 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
     ];
   }, [allCoords]);
 
-  const scheduleChange = (next: ExportPoint[]) => {
-    setLivePoints(next);
+  const scheduleChange = (nextPoints: ExportPoint[], nextWaypoints: ExportPoint[]) => {
+    setLivePoints(nextPoints);
+    setWaypoints(nextWaypoints);
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
-      onPointsChange?.(next);
+      onPointsChange?.(nextPoints, nextWaypoints);
     }, 800);
   };
 
   const handleDragEnd = (index: number, lat: number, lng: number) => {
     const next = livePoints.map((p, i) => (i === index ? { ...p, lat, lng } : p));
-    scheduleChange(next);
+    scheduleChange(next, waypoints);
   };
 
   const handleEditCoord = (index: number, field: 'lat' | 'lng', raw: string) => {
     const v = parseFloat(raw);
     if (Number.isNaN(v)) return;
     const next = livePoints.map((p, i) => (i === index ? { ...p, [field]: v } : p));
-    scheduleChange(next);
+    scheduleChange(next, waypoints);
+  };
+
+  const addWaypoint = (lat: number, lng: number) => {
+    if (waypoints.length >= 5) {
+      // eslint-disable-next-line no-alert
+      alert('Máximo 5 pontos intermediários.');
+      return;
+    }
+    const wp: ExportPoint = {
+      address: `Ponto intermediário ${waypoints.length + 1}`,
+      lat,
+      lng,
+    };
+    const next = [...waypoints, wp];
+    setAddMode(false);
+    scheduleChange(livePoints, next);
+  };
+
+  const dragWaypoint = (index: number, lat: number, lng: number) => {
+    const next = waypoints.map((w, i) => (i === index ? { ...w, lat, lng } : w));
+    scheduleChange(livePoints, next);
+  };
+
+  const removeWaypoint = (index: number) => {
+    const next = waypoints.filter((_, i) => i !== index);
+    scheduleChange(livePoints, next);
   };
 
   const resetCoords = () => {
+    setWaypoints([]);
     setLivePoints(originalPoints.current);
-    onPointsChange?.(originalPoints.current);
+    onPointsChange?.(originalPoints.current, []);
   };
 
   const exportPNG = async () => {
-    // Fallback: use native browser print for map area (leaflet-image not bundled)
     window.print();
   };
 
+  const exportPoints: ExportPoint[] = [
+    livePoints[0],
+    ...waypoints,
+    ...livePoints.slice(1),
+  ].filter(Boolean) as ExportPoint[];
 
   const iconFor = (i: number) =>
     i === 0 ? ICON_START : i === livePoints.length - 1 ? ICON_END : ICON_MID;
@@ -111,6 +156,13 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
         </div>
         <div className="flex items-center gap-1">
           <button
+            onClick={() => setAddMode((v) => !v)}
+            title={addMode ? 'Cancelar adição' : 'Adicionar ponto intermediário'}
+            className={`p-2 rounded-lg text-xs font-bold ${addMode ? 'bg-violet-600 text-white' : 'hover:bg-slate-100 text-violet-600'}`}
+          >
+            <Plus size={16} />
+          </button>
+          <button
             onClick={resetCoords}
             title="Resetar coordenadas originais"
             className="p-2 hover:bg-slate-100 rounded-lg text-slate-600"
@@ -118,7 +170,7 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
             <RotateCcw size={16} />
           </button>
           <button
-            onClick={() => download('rota-frete.gpx', 'application/gpx+xml', toGPX(allCoords, livePoints))}
+            onClick={() => download('rota-frete.gpx', 'application/gpx+xml', toGPX(allCoords, exportPoints))}
             title="Exportar GPX"
             className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 text-xs font-bold"
           >
@@ -126,7 +178,7 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
           </button>
           <button
             onClick={() =>
-              download('rota-frete.kml', 'application/vnd.google-earth.kml+xml', toKML(allCoords, livePoints))
+              download('rota-frete.kml', 'application/vnd.google-earth.kml+xml', toKML(allCoords, exportPoints))
             }
             title="Exportar KML"
             className="p-2 hover:bg-slate-100 rounded-lg text-slate-600 text-xs font-bold"
@@ -134,7 +186,7 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
             KML
           </button>
           <button
-            onClick={() => download('rota-frete.json', 'application/json', toJSON(allCoords, livePoints))}
+            onClick={() => download('rota-frete.json', 'application/json', toJSON(allCoords, exportPoints))}
             title="Exportar JSON"
             className="p-2 hover:bg-slate-100 rounded-lg text-slate-600"
           >
@@ -150,6 +202,12 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
         </div>
       </div>
 
+      {addMode && (
+        <div className="px-3 py-2 text-[11px] text-violet-700 bg-violet-50 border-b border-violet-200 font-medium">
+          Clique no mapa para adicionar um ponto intermediário. Arraste-o depois para ajustar. Máx. 5.
+        </div>
+      )}
+
       <div className="relative" style={{ height: 360 }}>
         {bounds && (
           <MapContainer
@@ -157,7 +215,7 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
               mapRef.current = m as unknown as L.Map;
             }}
             bounds={bounds}
-            style={{ height: '100%', width: '100%' }}
+            style={{ height: '100%', width: '100%', cursor: addMode ? 'crosshair' : '' }}
             scrollWheelZoom
           >
             <TileLayer
@@ -166,12 +224,13 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
               tileSize={256}
               maxZoom={19}
             />
+            <ClickToAdd enabled={addMode} onAdd={addWaypoint} />
             {coordinates && coordinates.length > 1 && (
               <Polyline positions={coordinates} pathOptions={{ color: '#2563eb', weight: 5, opacity: 0.85 }} />
             )}
             {livePoints.map((p, i) => (
               <Marker
-                key={`${i}-${p.address}`}
+                key={`base-${i}-${p.address}`}
                 position={[p.lat, p.lng]}
                 icon={iconFor(i)}
                 draggable
@@ -209,9 +268,39 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
                         />
                       </label>
                     </div>
-                    <p className="text-[10px] text-slate-400">
-                      Arraste o marcador no mapa ou edite as coordenadas — os custos serão recalculados.
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+            {waypoints.map((w, i) => (
+              <Marker
+                key={`wp-${i}`}
+                position={[w.lat, w.lng]}
+                icon={ICON_WAYPOINT}
+                draggable
+                eventHandlers={{
+                  dragend: (e) => {
+                    const m = e.target as L.Marker;
+                    const ll = m.getLatLng();
+                    dragWaypoint(i, ll.lat, ll.lng);
+                  },
+                }}
+              >
+                <Popup>
+                  <div className="text-xs space-y-2 min-w-[180px]">
+                    <p className="font-semibold">🟣 Ponto intermediário {i + 1}</p>
+                    <p className="text-slate-500 text-[11px]">
+                      {w.lat.toFixed(5)}, {w.lng.toFixed(5)}
                     </p>
+                    <p className="text-[10px] text-slate-500">
+                      Arraste para ajustar a rota; os custos serão recalculados.
+                    </p>
+                    <button
+                      onClick={() => removeWaypoint(i)}
+                      className="w-full flex items-center justify-center gap-1 px-2 py-1 bg-red-50 text-red-600 rounded text-[11px] font-medium hover:bg-red-100"
+                    >
+                      <Trash2 size={12} /> Remover
+                    </button>
                   </div>
                 </Popup>
               </Marker>
@@ -221,7 +310,7 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
         )}
       </div>
       <div className="px-3 py-2 text-[11px] text-slate-500 bg-slate-50 border-t border-[hsl(var(--border))]">
-        Dica: arraste qualquer marcador para corrigir a rota. O recálculo é automático após ~1 segundo.
+        Dica: clique em <b>+</b> e depois no mapa para adicionar um trecho por onde a rota deve passar. Arraste marcadores para ajustar. Recálculo automático em ~1s.
       </div>
     </div>
   );

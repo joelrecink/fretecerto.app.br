@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, RefreshCw, MapPin, Fuel, DollarSign, Clock, TrendingUp, Map, MessageCircle, Lightbulb, AlertCircle, Target, Truck } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, RefreshCw, MapPin, Fuel, DollarSign, Clock, TrendingUp, Map, MessageCircle, Lightbulb, AlertCircle, Target, Truck, FileDown } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import RouteMap from '@/components/frete/RouteMap';
 import type { ExportPoint } from '@/lib/routeExport';
+import { exportDriverRoutePdf } from '@/lib/tripExport';
 
 interface RoadRestriction {
   road: string;
@@ -100,11 +101,12 @@ interface SimulationResult {
 interface DashboardScreenProps {
   result: SimulationResult;
   onReset: () => void;
-  onRecalculateRoute?: (editedPoints: ExportPoint[]) => Promise<void> | void;
+  onRecalculateRoute?: (editedPoints: ExportPoint[], waypoints: ExportPoint[]) => Promise<void> | void;
   recalculating?: boolean;
 }
 
 const DashboardScreen: React.FC<DashboardScreenProps> = ({ result, onReset, onRecalculateRoute, recalculating }) => {
+  const [driverWaypoints, setDriverWaypoints] = useState<ExportPoint[]>([]);
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
 
@@ -168,6 +170,41 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
     toast.success('Abrindo WhatsApp para compartilhar...');
   };
 
+  const handleExportDriverPdf = () => {
+    exportDriverRoutePdf({
+      vehicle: {
+        driverName: undefined,
+        licensePlate: undefined,
+        axles: result.vehicleRestrictions?.axles,
+      },
+      originCity: result.originCity,
+      destinationCity: result.destinationCity,
+      geocodedPoints: result.geocodedPoints,
+      waypoints: driverWaypoints,
+      totalDistanceKm: result.totalDistanceKm,
+      totalDurationHours: result.totalDurationHours,
+      totalDurationDays: result.totalDurationDays,
+      estimatedFuelCost: result.estimatedFuelCost,
+      estimatedTollCost: result.estimatedTollCost,
+      driverCommissionCost: result.driverCommissionCost,
+      estimatedMaintenanceCost: result.estimatedMaintenanceCost,
+      estimatedFixedCost: result.estimatedFixedCost,
+      returnCost: result.returnCost,
+      totalFreightIncome: result.totalFreightIncome,
+      netProfit: result.netProfit,
+      viabilityScore: result.viabilityScore,
+      viabilityMessage: result.viabilityMessage,
+      aiAnalysis: result.aiAnalysis,
+      vehicleRestrictions: result.vehicleRestrictions,
+    });
+    toast.success('PDF do roteiro gerado');
+  };
+
+  const handleMapChange = (pts: ExportPoint[], wps: ExportPoint[]) => {
+    setDriverWaypoints(wps);
+    onRecalculateRoute?.(pts, wps);
+  };
+
   
 
   return (
@@ -220,7 +257,7 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
           <RouteMap
             coordinates={result.routeCoordinates || []}
             points={result.geocodedPoints.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }))}
-            onPointsChange={onRecalculateRoute}
+            onPointsChange={handleMapChange}
             loading={recalculating}
           />
         )}
@@ -574,6 +611,15 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
             <p className="text-sm text-violet-700">{result.routeSuggestions}</p>
           </div>
         )}
+
+        {/* Export Driver Route PDF */}
+        <button
+          onClick={handleExportDriverPdf}
+          className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-bold shadow-lg transition-all active:scale-[0.98]"
+        >
+          <FileDown size={20} />
+          Exportar Roteiro para Motorista (PDF)
+        </button>
       </div>
 
       {/* Bottom Actions */}
@@ -587,6 +633,13 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
             <MessageCircle size={24} />
           </button>
           <button
+            onClick={handleExportDriverPdf}
+            className="w-14 h-14 bg-violet-600 hover:bg-violet-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all active:scale-[0.98]"
+            title="Exportar PDF para motorista"
+          >
+            <FileDown size={22} />
+          </button>
+          <button
             onClick={onReset}
             className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 text-lg transition-all active:scale-[0.98]"
           >
@@ -595,6 +648,7 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
           </button>
         </div>
       </div>
+
     </div>
   );
 };

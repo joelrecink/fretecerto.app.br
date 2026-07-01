@@ -1,48 +1,54 @@
 ## Objetivo
 
-Substituir os inputs de endereço em **Coleta** e **Entrega** por um autocomplete que sugere endereços reais enquanto o usuário digita. Ao selecionar uma sugestão, o endereço fica com formato válido + `lat/lng` já preenchidos, eliminando erros como "Vrihft" e economizando chamadas de geocoding no `calculate-route`.
+Adicionar duas finalizações com exportação e permitir edição visual do traçado no mapa que recalcule custos.
 
-## Provider
+## 1. Exportação no Resumo da Viagem (pré-cálculo)
 
-**HERE Autosuggest API** (`https://autosuggest.search.hereapi.com/v1/autosuggest`).
-- Motivo: já temos `HERE_API_KEY` configurada e o HERE é o provedor principal de rota/pedágio; usar o mesmo motor evita divergência entre endereço sugerido e endereço geocodificado depois.
-- Filtro por Brasil (`in=countryCode:BRA`), idioma `pt-BR`, `limit=6`.
-- Chave server-side protegida por edge function proxy — nunca exposta no bundle.
+Na tela `TripSummaryScreen.tsx`, adicionar botão **"Imprimir Resumo"** que gera um PDF/impressão com:
+- Dados do veículo (placa, eixos, motorista, consumo, preço combustível)
+- Todos os pontos de coleta e entrega (endereços + valores + pesos)
+- Frete total estimado
+- Distância prevista
+- Configuração de retorno vazio (se ativo, distância e custo estimado)
 
-## Arquitetura
+Implementação: usar `window.print()` com uma view dedicada (`@media print` CSS) ou gerar via `jsPDF` + `html2canvas` para download direto.
 
-**Nova edge function `address-autocomplete`** (`supabase/functions/address-autocomplete/index.ts`):
-- `GET ?q=<texto>&lat=<opt>&lng=<opt>`
-- Requer JWT (mesmo padrão de `calculate-route`).
-- Valida `q` (mínimo 3 caracteres, máximo 200, regex de caracteres permitidos).
-- Chama HERE Autosuggest, retorna array normalizado: `{ id, label, address, lat, lng }`.
-- Cache de 60s via header `Cache-Control` para reduzir custo.
+## 2. Exportação da Análise IA (pós-cálculo)
 
-**Novo componente `src/components/frete/AddressAutocomplete.tsx`**:
-- Props: `value`, `onChange(address, coords?)`, `placeholder`, `id`.
-- Input controlado + dropdown com sugestões (usa componentes `Command`/`Popover` do shadcn, já disponíveis).
-- Debounce de 300 ms antes de chamar a edge function.
-- Teclado: setas ↑↓ para navegar, Enter para selecionar, Esc para fechar.
-- Ao selecionar: chama `onChange(item.label, { lat, lng })` e fecha o dropdown.
-- Mostra estado "buscando…" e "nenhum resultado".
+No `DashboardScreen.tsx` (resultado final com IA), adicionar botão **"Exportar Roteiro para Motorista"** com opções:
+- **PDF completo**: resumo executivo — dados da viagem, custos detalhados, análise IA (score, margem, alertas, sugestões), mapa da rota (imagem), coordenadas dos pontos, distância/duração, pedágios
+- **Compartilhar por WhatsApp** (já existe — manter)
+- **Exportar rota GPX/KML** (já existe no RouteMap — expor também aqui)
 
-**Integração nas telas**:
-- `PickupScreen.tsx` e `DeliveryScreen.tsx`: trocar o `<Input>` do endereço pelo `<AddressAutocomplete>`.
-- `Index.tsx` (`onUpdatePickup`/`onUpdateDelivery`): aceitar `coords` opcional e gravar `lat`/`lng` no item de rota — o `useRouteCalculation` já envia esses campos para o backend quando presentes, então o `calculate-route` pula o geocode.
-- Se o usuário editar o texto depois de ter selecionado uma sugestão, limpar `lat`/`lng` (força nova seleção ou fallback para geocode).
+O PDF é o entregável para o motorista: rota, endereços, valores, alertas de restrições do veículo.
 
-## Comportamento e UX
+## 3. Edição visual do traçado no mapa (waypoints)
 
-- Digitação livre continua permitida (não bloquear submit se o usuário não escolher sugestão) — o backend fará geocode como fallback.
-- Um badge verde discreto ("✓ endereço confirmado") aparece quando `lat/lng` está preenchido, indicando que aquele endereço não vai gastar geocoding extra.
-- Sem alterações em cores/tipografia/layout: reaproveita tokens existentes.
+Estender `RouteMap.tsx` para permitir **adicionar/mover waypoints intermediários** que alteram o traçado:
+- Clique no mapa → adiciona um waypoint intermediário (marcador roxo arrastável)
+- Arrastar waypoint → recalcula rota via HERE passando por ele
+- Botão "Remover waypoint" no popup
+- Ao alterar traçado → `calculate-route` retorna nova distância/duração/pedágio → custos da viagem se atualizam automaticamente (mesmo mecanismo do `handleRecalculateRoute` já existente)
 
-## Arquivos
+Backend: `calculate-route` já aceita origins/destinations; adicionar suporte a `via` (waypoints intermediários) que a HERE Routing v8 suporta via parâmetro `via=lat,lng`.
 
-- Novo: `supabase/functions/address-autocomplete/index.ts`
-- Novo: `src/components/frete/AddressAutocomplete.tsx`
-- Editado: `src/components/frete/screens/PickupScreen.tsx`
-- Editado: `src/components/frete/screens/DeliveryScreen.tsx`
-- Editado: `src/pages/Index.tsx` (handler aceita `coords` e limpa ao editar texto)
+## Arquivos afetados
 
-Sem novas dependências, sem alterações de schema, sem novos secrets (usa `HERE_API_KEY` existente).
+- `src/components/frete/screens/TripSummaryScreen.tsx` — botão imprimir + view de impressão
+- `src/components/frete/screens/DashboardScreen.tsx` — botão exportar PDF para motorista
+- `src/lib/tripExport.ts` (novo) — geração de PDF (jsPDF)
+- `src/components/frete/RouteMap.tsx` — adicionar/remover waypoints por clique
+- `src/pages/Index.tsx` — propagar waypoints no recálculo
+- `src/hooks/useRouteCalculation.tsx` — aceitar `waypoints`
+- `supabase/functions/calculate-route/index.ts` — repassar `via=` para HERE
+
+## Dependências novas
+
+`jspdf` (~50KB) para geração de PDF client-side. Sem servidor extra.
+
+## Perguntas de decisão
+
+Antes de implementar, confirme:
+1. **Formato do resumo pré-cálculo**: PDF para download, ou apenas impressão via browser (Ctrl+P)?
+2. **PDF do motorista**: incluir imagem do mapa embutida no PDF? (aumenta ~200KB por PDF mas é útil para o motorista)
+3. **Waypoints no mapa**: máximo de quantos pontos intermediários permitir? (sugiro 5 para não estourar limite de URL da HERE)

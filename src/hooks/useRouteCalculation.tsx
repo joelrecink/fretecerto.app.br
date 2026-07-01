@@ -46,7 +46,8 @@ interface UseRouteCalculationReturn {
     pickups: RoutePoint[],
     deliveries: RoutePoint[],
     axles: number,
-    cargoCapacity?: number
+    cargoCapacity?: number,
+    waypoints?: RoutePoint[]
   ) => Promise<RouteCalculationResult | null>;
   loading: boolean;
   error: string | null;
@@ -62,7 +63,8 @@ export const useRouteCalculation = (): UseRouteCalculationReturn => {
     pickups: RoutePoint[],
     deliveries: RoutePoint[],
     axles: number,
-    cargoCapacity?: number
+    cargoCapacity?: number,
+    waypoints?: RoutePoint[]
   ): Promise<RouteCalculationResult | null> => {
     setLoading(true);
     setError(null);
@@ -71,6 +73,7 @@ export const useRouteCalculation = (): UseRouteCalculationReturn => {
       // Filter out empty addresses
       const validPickups = pickups.filter(p => p.address.trim().length > 0);
       const validDeliveries = deliveries.filter(d => d.address.trim().length > 0);
+      const validWaypoints = (waypoints ?? []).filter(w => w.lat != null && w.lng != null);
 
       if (validPickups.length === 0 || validDeliveries.length === 0) {
         throw new Error('Informe pelo menos um endereço de coleta e um de entrega');
@@ -79,6 +82,7 @@ export const useRouteCalculation = (): UseRouteCalculationReturn => {
       console.log('Calculating route with:', {
         pickups: validPickups.map(p => p.address),
         deliveries: validDeliveries.map(d => d.address),
+        waypoints: validWaypoints.length,
         axles,
         cargoCapacity
       });
@@ -95,6 +99,7 @@ export const useRouteCalculation = (): UseRouteCalculationReturn => {
               ? { address: d.address, lat: d.lat, lng: d.lng }
               : { address: d.address },
           ),
+          waypoints: validWaypoints.map(w => ({ address: w.address, lat: w.lat, lng: w.lng })),
           axles,
           cargoCapacity,
         },
