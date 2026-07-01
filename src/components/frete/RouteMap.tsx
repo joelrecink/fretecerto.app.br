@@ -11,7 +11,7 @@ export function buildHereWeGoUrl(points: ExportPoint[]): string {
   return `https://wego.here.com/directions/mix/${segs.join('/')}`;
 }
 
-function openInHereMaps(points: ExportPoint[]) {
+export function openInHereMaps(points: ExportPoint[]) {
   const url = buildHereWeGoUrl(points);
   const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad/i.test(navigator.userAgent);
   if (isMobile) {
