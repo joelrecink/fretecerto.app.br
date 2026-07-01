@@ -905,14 +905,13 @@ const CostsMaintenanceScreen: React.FC<CostsMaintenanceScreenProps> = ({
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-[hsl(var(--foreground))]">Horas de espera / dia</label>
                 <div className="relative">
-                  <input
-                    type="text"
-                    inputMode="decimal"
+                  <NumericInput
                     value={data.estimatedWaitHoursPerDay ?? 2}
-                    onChange={(e) => handleInputChange('estimatedWaitHoursPerDay', e.target.value)}
+                    onChange={(v) => handleInputChange('estimatedWaitHoursPerDay', v)}
                     placeholder="2"
                     className="w-full px-4 py-3 border-2 border-[hsl(var(--border))] rounded-xl text-base bg-white"
                   />
+
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[hsl(var(--muted-foreground))]">h</span>
                 </div>
                 <p className="text-xs text-[hsl(var(--muted-foreground))]">Estimativa carga/descarga</p>
