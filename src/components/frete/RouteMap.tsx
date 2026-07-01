@@ -1,8 +1,34 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L, { LatLngBoundsExpression } from 'leaflet';
-import { Download, RotateCcw, Map as MapIcon, FileJson, Plus, Trash2 } from 'lucide-react';
+import { Download, RotateCcw, Map as MapIcon, FileJson, Plus, Trash2, RefreshCw, Navigation } from 'lucide-react';
 import { toGPX, toKML, toJSON, download, ExportPoint } from '@/lib/routeExport';
+
+function buildHereWeGoUrl(points: ExportPoint[]): string {
+  const segs = points
+    .filter(Boolean)
+    .map((p) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)},${encodeURIComponent(p.address || 'Ponto')}`);
+  return `https://wego.here.com/directions/mix/${segs.join('/')}`;
+}
+
+function openInHereMaps(points: ExportPoint[]) {
+  const url = buildHereWeGoUrl(points);
+  const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (isMobile) {
+    // Try app deep link; fall back to web after short delay
+    const fallback = window.setTimeout(() => {
+      window.open(url, '_blank');
+    }, 800);
+    try {
+      window.location.href = url.replace('https://', 'heremaps://');
+    } catch {
+      window.clearTimeout(fallback);
+      window.open(url, '_blank');
+    }
+  } else {
+    window.open(url, '_blank');
+  }
+}
 
 const TILE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/here-tile-proxy?z={z}&x={x}&y={y}`;
 
