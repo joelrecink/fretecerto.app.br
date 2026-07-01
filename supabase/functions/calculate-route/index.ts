@@ -190,7 +190,13 @@ serve(async (req) => {
         geocodedPoints.push({ address: p.address, lat: p.lat, lng: p.lng });
       } else {
         const c = await hereGeocode(p.address, hereApiKey);
-        if (!c) throw new Error(`Endereço não encontrado: ${p.address}`);
+        if (!c) {
+          return new Response(JSON.stringify({
+            success: false,
+            error: `Endereço não encontrado: "${p.address}". Verifique se está escrito corretamente (ex: "Rua, número, cidade, UF").`,
+            invalidAddress: p.address,
+          }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
         geocodedPoints.push({ address: p.address, ...c });
       }
     }
