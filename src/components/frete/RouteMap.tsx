@@ -270,8 +270,18 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
               maxZoom={19}
             />
             <ClickToAdd enabled={addMode} onAdd={addWaypoint} />
-            {coordinates && coordinates.length > 1 && (
-              <Polyline positions={coordinates} pathOptions={{ color: '#2563eb', weight: 5, opacity: 0.85 }} />
+            {coordinates && coordinates.length > 1 ? (
+              <>
+                <Polyline positions={coordinates} pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.9 }} />
+                <Polyline positions={coordinates} pathOptions={{ color: '#dc2626', weight: 6, opacity: 0.95 }} />
+              </>
+            ) : (
+              exportPoints.length > 1 && (
+                <Polyline
+                  positions={exportPoints.map((p) => [p.lat, p.lng]) as [number, number][]}
+                  pathOptions={{ color: '#94a3b8', weight: 3, opacity: 0.8, dashArray: '6 8' }}
+                />
+              )
             )}
             {livePoints.map((p, i) => (
               <Marker
