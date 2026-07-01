@@ -1,54 +1,26 @@
-## Objetivo
+## Diagnóstico
 
-Adicionar duas finalizações com exportação e permitir edição visual do traçado no mapa que recalcule custos.
+Código já está aplicado no repositório:
+- `TripSummaryScreen.tsx` linha 140-146 — botão **Imprimir Resumo (PDF)**
+- `DashboardScreen.tsx` linha 615-622 — botão **Exportar Roteiro para Motorista (PDF)** + atalho na barra inferior (linha 636)
+- `RouteMap.tsx` — botão **+** (roxo) no cabeçalho para adicionar waypoints
+- `calculate-route/index.ts` — parâmetro `waypoints` já propagado para HERE
+- `jspdf` instalado, typecheck passa sem erros
 
-## 1. Exportação no Resumo da Viagem (pré-cálculo)
+O código está correto, então o problema é **preview desatualizado** (bundle em cache do navegador ou dev server servindo versão anterior).
 
-Na tela `TripSummaryScreen.tsx`, adicionar botão **"Imprimir Resumo"** que gera um PDF/impressão com:
-- Dados do veículo (placa, eixos, motorista, consumo, preço combustível)
-- Todos os pontos de coleta e entrega (endereços + valores + pesos)
-- Frete total estimado
-- Distância prevista
-- Configuração de retorno vazio (se ativo, distância e custo estimado)
+## Plano de validação
 
-Implementação: usar `window.print()` com uma view dedicada (`@media print` CSS) ou gerar via `jsPDF` + `html2canvas` para download direto.
+1. **Reiniciar o dev server** para forçar rebuild limpo do Vite.
+2. **Verificar via Playwright headless**:
+   - Abrir `http://localhost:8080`, autenticar com sessão injetada
+   - Percorrer o fluxo até `TripSummaryScreen` e capturar screenshot confirmando o botão "Imprimir Resumo (PDF)"
+   - Ir até `DashboardScreen` (calcular rota), capturar screenshot do botão "Exportar Roteiro para Motorista (PDF)" e da barra do mapa com o botão `+`
+3. **Se os botões estiverem presentes no screenshot**: instruir você a fazer *hard refresh* no preview (Ctrl+Shift+R / recarregar sem cache) — o bundle antigo estava em cache.
+4. **Se estiverem ausentes**: investigar warning silencioso do Vite (ex.: erro de HMR) e ajustar.
 
-## 2. Exportação da Análise IA (pós-cálculo)
+Nenhum arquivo será modificado nesta etapa — é uma validação diagnóstica.
 
-No `DashboardScreen.tsx` (resultado final com IA), adicionar botão **"Exportar Roteiro para Motorista"** com opções:
-- **PDF completo**: resumo executivo — dados da viagem, custos detalhados, análise IA (score, margem, alertas, sugestões), mapa da rota (imagem), coordenadas dos pontos, distância/duração, pedágios
-- **Compartilhar por WhatsApp** (já existe — manter)
-- **Exportar rota GPX/KML** (já existe no RouteMap — expor também aqui)
+## Perguntas
 
-O PDF é o entregável para o motorista: rota, endereços, valores, alertas de restrições do veículo.
-
-## 3. Edição visual do traçado no mapa (waypoints)
-
-Estender `RouteMap.tsx` para permitir **adicionar/mover waypoints intermediários** que alteram o traçado:
-- Clique no mapa → adiciona um waypoint intermediário (marcador roxo arrastável)
-- Arrastar waypoint → recalcula rota via HERE passando por ele
-- Botão "Remover waypoint" no popup
-- Ao alterar traçado → `calculate-route` retorna nova distância/duração/pedágio → custos da viagem se atualizam automaticamente (mesmo mecanismo do `handleRecalculateRoute` já existente)
-
-Backend: `calculate-route` já aceita origins/destinations; adicionar suporte a `via` (waypoints intermediários) que a HERE Routing v8 suporta via parâmetro `via=lat,lng`.
-
-## Arquivos afetados
-
-- `src/components/frete/screens/TripSummaryScreen.tsx` — botão imprimir + view de impressão
-- `src/components/frete/screens/DashboardScreen.tsx` — botão exportar PDF para motorista
-- `src/lib/tripExport.ts` (novo) — geração de PDF (jsPDF)
-- `src/components/frete/RouteMap.tsx` — adicionar/remover waypoints por clique
-- `src/pages/Index.tsx` — propagar waypoints no recálculo
-- `src/hooks/useRouteCalculation.tsx` — aceitar `waypoints`
-- `supabase/functions/calculate-route/index.ts` — repassar `via=` para HERE
-
-## Dependências novas
-
-`jspdf` (~50KB) para geração de PDF client-side. Sem servidor extra.
-
-## Perguntas de decisão
-
-Antes de implementar, confirme:
-1. **Formato do resumo pré-cálculo**: PDF para download, ou apenas impressão via browser (Ctrl+P)?
-2. **PDF do motorista**: incluir imagem do mapa embutida no PDF? (aumenta ~200KB por PDF mas é útil para o motorista)
-3. **Waypoints no mapa**: máximo de quantos pontos intermediários permitir? (sugiro 5 para não estourar limite de URL da HERE)
+- Você já tentou recarregar o preview com cache limpo (segurar o botão de reload)? Isso resolve 90% dos casos em que o código está no repositório mas a tela não muda.
