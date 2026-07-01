@@ -306,7 +306,6 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
                 const middle = base.slice(1, -1);
                 const full: ExportPoint[] = [origin, ...middle, ...driverWaypoints, destination];
                 const gmapsUrl = buildGoogleMapsUrlFromRoute(full, result.routeCoordinates);
-                const hereUrl = buildHereWeGoTruckUrl(full);
                 const distancia = result.totalDistanceKm.toLocaleString('pt-BR');
                 const paradas = full
                   .map((p, i) => {
@@ -317,11 +316,10 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
                 const msg =
                   `🚚 *Rota pronta para navegação*\n\n${paradas}\n\n` +
                   `📏 Distância total: ${distancia} km\n\n` +
-                  `🗺️ *Google Maps* (travado na rota do caminhão):\n${gmapsUrl}\n\n` +
-                  `🚛 *HERE WeGo* (modo caminhão, respeita restrições):\n${hereUrl}`;
+                  `🗺️ *Google Maps* (travado na rota do caminhão):\n${gmapsUrl}`;
                 const waUrl = `https://wa.me/?text=${encodeURIComponent(msg)}`;
                 window.open(waUrl, '_blank', 'noopener,noreferrer');
-                toast.success('Abrindo WhatsApp com os links da rota…');
+                toast.success('Abrindo WhatsApp com o link da rota…');
               }}
               className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-gradient-to-r from-green-500 to-green-600 text-white font-bold shadow-lg hover:shadow-xl active:scale-[0.98] transition"
             >
