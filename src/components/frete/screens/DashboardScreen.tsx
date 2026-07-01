@@ -261,35 +261,20 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
               onPointsChange={handleMapChange}
               loading={recalculating}
             />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <button
-                onClick={() => {
-                  const base = result.geocodedPoints!.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }));
-                  if (base.length < 2) { toast.error('Rota incompleta.'); return; }
-                  const full: ExportPoint[] = [base[0], ...base.slice(1, -1), ...driverWaypoints, base[base.length - 1]];
-                  const gmapsUrl = buildGoogleMapsUrlFromRoute(full, result.routeCoordinates);
-                  window.open(gmapsUrl, '_blank', 'noopener,noreferrer');
-                  toast.success('Abrindo Google Maps travado na rota do caminhão…');
-                }}
-                className="flex items-center justify-center gap-2 py-3 px-3 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold shadow-lg active:scale-[0.98] transition"
-              >
-                <Navigation size={18} />
-                Navegar (Google Maps)
-              </button>
-              <button
-                onClick={() => {
-                  const base = result.geocodedPoints!.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }));
-                  if (base.length < 2) { toast.error('Rota incompleta.'); return; }
-                  const full: ExportPoint[] = [base[0], ...base.slice(1, -1), ...driverWaypoints, base[base.length - 1]];
-                  window.open(buildHereWeGoTruckUrl(full), '_blank', 'noopener,noreferrer');
-                  toast.success('Abrindo HERE WeGo (modo caminhão)…');
-                }}
-                className="flex items-center justify-center gap-2 py-3 px-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-bold shadow-lg active:scale-[0.98] transition"
-              >
-                <Truck size={18} />
-                Navegar (HERE Caminhão)
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                const base = result.geocodedPoints!.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }));
+                if (base.length < 2) { toast.error('Rota incompleta.'); return; }
+                const full: ExportPoint[] = [base[0], ...base.slice(1, -1), ...driverWaypoints, base[base.length - 1]];
+                const gmapsUrl = buildGoogleMapsUrlFromRoute(full, result.routeCoordinates);
+                window.open(gmapsUrl, '_blank', 'noopener,noreferrer');
+                toast.success('Abrindo Google Maps travado na rota do caminhão…');
+              }}
+              className="w-full flex items-center justify-center gap-2 py-3 px-3 rounded-2xl bg-gradient-to-r from-blue-500 to-blue-600 text-white font-bold shadow-lg active:scale-[0.98] transition"
+            >
+              <Navigation size={18} />
+              Navegar (Google Maps)
+            </button>
             <button
               onClick={() => {
                 const base = result.geocodedPoints!.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }));
