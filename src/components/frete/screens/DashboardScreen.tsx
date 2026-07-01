@@ -611,6 +611,15 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
             <p className="text-sm text-violet-700">{result.routeSuggestions}</p>
           </div>
         )}
+
+        {/* Export Driver Route PDF */}
+        <button
+          onClick={handleExportDriverPdf}
+          className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 text-white font-bold shadow-lg transition-all active:scale-[0.98]"
+        >
+          <FileDown size={20} />
+          Exportar Roteiro para Motorista (PDF)
+        </button>
       </div>
 
       {/* Bottom Actions */}
@@ -624,6 +633,13 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
             <MessageCircle size={24} />
           </button>
           <button
+            onClick={handleExportDriverPdf}
+            className="w-14 h-14 bg-violet-600 hover:bg-violet-700 text-white rounded-xl shadow-lg flex items-center justify-center transition-all active:scale-[0.98]"
+            title="Exportar PDF para motorista"
+          >
+            <FileDown size={22} />
+          </button>
+          <button
             onClick={onReset}
             className="flex-1 bg-[hsl(var(--primary))] hover:bg-[hsl(var(--primary))]/90 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-3 text-lg transition-all active:scale-[0.98]"
           >
@@ -632,6 +648,7 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
           </button>
         </div>
       </div>
+
     </div>
   );
 };
