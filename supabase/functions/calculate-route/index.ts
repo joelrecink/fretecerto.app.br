@@ -387,76 +387,15 @@ serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     } catch (hereErr) {
-      console.error('HERE failed, attempting TomTom fallback:', hereErr);
-      routingEngine = 'tomtom';
+      const msg = hereErr instanceof Error ? hereErr.message : String(hereErr);
+      console.error('HERE routing failed:', msg);
+      return new Response(JSON.stringify({
+        success: false,
+        error: `Não foi possível calcular uma rota navegável para este veículo (${axles} eixos, ~${Math.round(weightKg / 1000)}t) entre os pontos informados. Tente revisar os endereços ou reduzir as restrições do veículo.`,
+        detail: msg,
+      }), { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // ---- TomTom fallback ----
-    if (!tomtomApiKey) throw new Error('HERE failed and no TomTom fallback configured');
-
-    const locations = geocodedPoints.map(p => `${p.lat},${p.lng}`).join(':');
-    const tomtomUrl = new URL(`https://api.tomtom.com/routing/1/calculateRoute/${locations}/json`);
-    tomtomUrl.searchParams.append('key', tomtomApiKey);
-    tomtomUrl.searchParams.append('traffic', 'true');
-    tomtomUrl.searchParams.append('travelMode', 'truck');
-    tomtomUrl.searchParams.append('vehicleWeight', String(Math.round(weightKg)));
-    tomtomUrl.searchParams.append('vehicleAxleWeight', String(Math.round(weightKg / axles)));
-    tomtomUrl.searchParams.append('vehicleHeight', String(Math.round(heightM * 100)));
-    tomtomUrl.searchParams.append('vehicleWidth', String(Math.round(widthM * 100)));
-    tomtomUrl.searchParams.append('vehicleLength', String(Math.round(lengthM * 100)));
-    tomtomUrl.searchParams.append('routeType', 'fastest');
-    tomtomUrl.searchParams.append('language', 'pt-BR');
-
-    const r = await fetch(tomtomUrl.toString());
-    if (!r.ok) {
-      const t = await r.text();
-      throw new Error(`TomTom error ${r.status}: ${t}`);
-    }
-    const tt = await r.json();
-    const route = tt.routes?.[0];
-    if (!route) throw new Error('TomTom returned no route');
-
-    totalDistanceKm = (route.summary?.lengthInMeters ?? 0) / 1000;
-    totalDurationHours = (route.summary?.travelTimeInSeconds ?? 0) / 3600;
-    const pts: string[] = [];
-    const ttCoords: [number, number][] = [];
-    for (const leg of route.legs ?? []) {
-      for (const p of leg.points ?? []) {
-        pts.push(`${p.latitude},${p.longitude}`);
-        ttCoords.push([p.latitude, p.longitude]);
-      }
-    }
-    if (ttCoords.length < 2) {
-      throw new Error('TomTom retornou distância, mas não retornou o traçado navegável da estrada.');
-    }
-    polyline = pts.join('|');
-
-    const lats = ttCoords.map(p => p[0]);
-    const lngs = ttCoords.map(p => p[1]);
-    const bounds = {
-      northeast: { lat: Math.max(...lats), lng: Math.max(...lngs) },
-      southwest: { lat: Math.min(...lats), lng: Math.min(...lngs) },
-    };
-
-    summary = `TomTom Truck Routing (fallback)`;
-    routeWarnings.push('⚠️ Usando fallback TomTom (HERE indisponível). Pedágios não disponíveis.');
-
-    return new Response(JSON.stringify({
-      success: true,
-      totalDistanceKm: Math.round(totalDistanceKm * 10) / 10,
-      totalDurationHours: Math.round(totalDurationHours * 10) / 10,
-      estimatedTollCost: 0,
-      tollSource: 'unavailable',
-      tollDetails: [],
-      routeDetails,
-      polyline,
-      routeCoordinates: ttCoords,
-      geocodedPoints,
-      bounds,
-      summary,
-      routingEngine: 'tomtom',
-      vehicleRestrictions: { axles, warnings: routeWarnings, avoidedRoads: [] },
-    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Unknown error';
