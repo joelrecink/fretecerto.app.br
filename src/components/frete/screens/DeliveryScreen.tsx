@@ -1,6 +1,8 @@
 import React from 'react';
-import { MapPin, Plus, Trash2, ArrowLeft, Calculator, Mic } from 'lucide-react';
+import { MapPin, Plus, Trash2, ArrowLeft, Calculator } from 'lucide-react';
 import AddressAutocomplete from '../AddressAutocomplete';
+import NumericInput from '../NumericInput';
+
 
 interface RoutePoint {
   id: string;
