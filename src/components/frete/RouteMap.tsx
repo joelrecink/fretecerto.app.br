@@ -1,8 +1,34 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L, { LatLngBoundsExpression } from 'leaflet';
-import { Download, RotateCcw, Map as MapIcon, FileJson, Plus, Trash2 } from 'lucide-react';
+import { Download, RotateCcw, Map as MapIcon, FileJson, Plus, Trash2, RefreshCw, Navigation } from 'lucide-react';
 import { toGPX, toKML, toJSON, download, ExportPoint } from '@/lib/routeExport';
+
+function buildHereWeGoUrl(points: ExportPoint[]): string {
+  const segs = points
+    .filter(Boolean)
+    .map((p) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)},${encodeURIComponent(p.address || 'Ponto')}`);
+  return `https://wego.here.com/directions/mix/${segs.join('/')}`;
+}
+
+function openInHereMaps(points: ExportPoint[]) {
+  const url = buildHereWeGoUrl(points);
+  const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad/i.test(navigator.userAgent);
+  if (isMobile) {
+    // Try app deep link; fall back to web after short delay
+    const fallback = window.setTimeout(() => {
+      window.open(url, '_blank');
+    }, 800);
+    try {
+      window.location.href = url.replace('https://', 'heremaps://');
+    } catch {
+      window.clearTimeout(fallback);
+      window.open(url, '_blank');
+    }
+  } else {
+    window.open(url, '_blank');
+  }
+}
 
 const TILE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/here-tile-proxy?z={z}&x={x}&y={y}`;
 
@@ -81,7 +107,12 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {
       onPointsChange?.(nextPoints, nextWaypoints);
-    }, 800);
+    }, 500);
+  };
+
+  const recalcNow = () => {
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    onPointsChange?.(livePoints, waypoints);
   };
 
   const handleDragEnd = (index: number, lat: number, lng: number) => {
@@ -154,7 +185,21 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap justify-end">
+          <button
+            onClick={() => openInHereMaps(exportPoints)}
+            title="Abrir rota no HERE WeGo"
+            className="px-2 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1"
+          >
+            <Navigation size={14} /> HERE
+          </button>
+          <button
+            onClick={recalcNow}
+            title="Recalcular rota agora"
+            className="px-2 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1"
+          >
+            <RefreshCw size={14} /> Recalcular
+          </button>
           <button
             onClick={() => setAddMode((v) => !v)}
             title={addMode ? 'Cancelar adição' : 'Adicionar ponto intermediário'}
@@ -225,8 +270,18 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
               maxZoom={19}
             />
             <ClickToAdd enabled={addMode} onAdd={addWaypoint} />
-            {coordinates && coordinates.length > 1 && (
-              <Polyline positions={coordinates} pathOptions={{ color: '#2563eb', weight: 5, opacity: 0.85 }} />
+            {coordinates && coordinates.length > 1 ? (
+              <>
+                <Polyline positions={coordinates} pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.9 }} />
+                <Polyline positions={coordinates} pathOptions={{ color: '#dc2626', weight: 6, opacity: 0.95 }} />
+              </>
+            ) : (
+              exportPoints.length > 1 && (
+                <Polyline
+                  positions={exportPoints.map((p) => [p.lat, p.lng]) as [number, number][]}
+                  pathOptions={{ color: '#94a3b8', weight: 3, opacity: 0.8, dashArray: '6 8' }}
+                />
+              )
             )}
             {livePoints.map((p, i) => (
               <Marker
