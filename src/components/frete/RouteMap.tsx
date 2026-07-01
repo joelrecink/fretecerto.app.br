@@ -5,9 +5,6 @@ import { RotateCcw, Map as MapIcon, Plus, Trash2, RefreshCw, MoreVertical, X } f
 import { toGPX, toKML, toJSON, download, ExportPoint } from '@/lib/routeExport';
 
 // Builds a Google Maps universal navigation link.
-// On Android/iOS this opens directly in the Google Maps app when installed,
-// without the "download the app" interstitial that wego.here.com shows.
-// Name kept as buildHereWeGoUrl for backward compatibility with existing imports.
 export function buildHereWeGoUrl(points: ExportPoint[]): string {
   const valid = points.filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
   if (valid.length < 2) return 'https://www.google.com/maps';
@@ -22,6 +19,62 @@ export function buildHereWeGoUrl(points: ExportPoint[]): string {
   });
   if (mids.length) params.set('waypoints', mids.join('|'));
   return `https://www.google.com/maps/dir/?${params.toString()}`;
+}
+
+// Google Maps só tem modo "carro" no link universal, então pode sugerir atalhos
+// proibidos para caminhão. Para forçar o Maps a seguir o traçado calculado pela
+// HERE para o perfil de caminhão, injetamos waypoints amostrados ao longo do
+// polyline navegável. Isso "trava" o Maps na rota do caminhão.
+// Limite prático de waypoints no link do Google: 9.
+export function buildGoogleMapsUrlFromRoute(
+  points: ExportPoint[],
+  routeCoordinates: [number, number][] | undefined,
+  maxWaypoints = 9,
+): string {
+  const valid = points.filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
+  if (valid.length < 2) return buildHereWeGoUrl(points);
+  const origin = valid[0];
+  const destination = valid[valid.length - 1];
+  const userMids = valid.slice(1, -1);
+
+  const remaining = Math.max(0, maxWaypoints - userMids.length);
+  const sampled: Array<{ lat: number; lng: number }> = [];
+  if (routeCoordinates && routeCoordinates.length > 2 && remaining > 0) {
+    const n = Math.min(remaining, routeCoordinates.length - 2);
+    for (let i = 1; i <= n; i++) {
+      const idx = Math.floor((i * (routeCoordinates.length - 1)) / (n + 1));
+      const [lat, lng] = routeCoordinates[idx];
+      if (Number.isFinite(lat) && Number.isFinite(lng)) sampled.push({ lat, lng });
+    }
+  }
+
+  const fmt = (lat: number, lng: number) => `${lat.toFixed(6)},${lng.toFixed(6)}`;
+  const waypoints = [
+    ...userMids.map((p) => fmt(p.lat, p.lng)),
+    ...sampled.map((p) => fmt(p.lat, p.lng)),
+  ];
+
+  const params = new URLSearchParams({
+    api: '1',
+    travelmode: 'driving',
+    origin: fmt(origin.lat, origin.lng),
+    destination: fmt(destination.lat, destination.lng),
+  });
+  if (waypoints.length) params.set('waypoints', waypoints.join('|'));
+  return `https://www.google.com/maps/dir/?${params.toString()}`;
+}
+
+// Link do HERE WeGo em modo caminhão (respeita restrições de eixos/altura/peso).
+export function buildHereWeGoTruckUrl(points: ExportPoint[]): string {
+  const valid = points.filter((p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lng));
+  if (valid.length < 2) return 'https://wego.here.com';
+  const segs = valid.map(
+    (p, i) =>
+      `${p.lat.toFixed(6)},${p.lng.toFixed(6)},${encodeURIComponent(
+        p.address || (i === 0 ? 'Origem' : i === valid.length - 1 ? 'Destino' : `Parada ${i}`),
+      )}`,
+  );
+  return `https://wego.here.com/directions/mix/${segs.join('/')}?m=t`;
 }
 
 export function openInHereMaps(points: ExportPoint[]) {
