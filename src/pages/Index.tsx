@@ -545,9 +545,12 @@ const Index = () => {
     }
   };
 
-  // Recalcula rota + custos quando o usuário edita coordenadas no mapa.
+  // Recalcula rota + custos quando o usuário edita coordenadas no mapa ou adiciona waypoints.
   // Mantém análise IA atual (não consome créditos novamente).
-  const handleRecalculateRoute = async (editedPoints: Array<{ address: string; lat: number; lng: number }>) => {
+  const handleRecalculateRoute = async (
+    editedPoints: Array<{ address: string; lat: number; lng: number }>,
+    waypoints: Array<{ address: string; lat: number; lng: number }> = []
+  ) => {
     if (!result) return;
     setRecalculating(true);
     try {
@@ -556,7 +559,14 @@ const Index = () => {
         const ep = editedPoints[pickups.length + i];
         return { ...d, address: ep?.address ?? d.address, lat: ep?.lat, lng: ep?.lng };
       });
-      const r = await calculateRoute(newPickups, newDeliveries, vehicle.axles, vehicle.cargoCapacity);
+      const wpForCalc = waypoints.map((w, i) => ({
+        id: `wp-${i}`,
+        address: w.address,
+        value: 0,
+        lat: w.lat,
+        lng: w.lng,
+      }));
+      const r = await calculateRoute(newPickups, newDeliveries, vehicle.axles, vehicle.cargoCapacity, wpForCalc);
       if (!r) return;
 
       const distance = r.totalDistanceKm;
