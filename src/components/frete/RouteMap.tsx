@@ -1,17 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L, { LatLngBoundsExpression } from 'leaflet';
-import { Download, RotateCcw, Map as MapIcon, FileJson, Plus, Trash2, RefreshCw, Navigation } from 'lucide-react';
+import { Download, RotateCcw, Map as MapIcon, FileJson, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { toGPX, toKML, toJSON, download, ExportPoint } from '@/lib/routeExport';
 
-function buildHereWeGoUrl(points: ExportPoint[]): string {
+export function buildHereWeGoUrl(points: ExportPoint[]): string {
   const segs = points
     .filter(Boolean)
     .map((p) => `${p.lat.toFixed(6)},${p.lng.toFixed(6)},${encodeURIComponent(p.address || 'Ponto')}`);
   return `https://wego.here.com/directions/mix/${segs.join('/')}`;
 }
 
-function openInHereMaps(points: ExportPoint[]) {
+export function openInHereMaps(points: ExportPoint[]) {
   const url = buildHereWeGoUrl(points);
   const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad/i.test(navigator.userAgent);
   if (isMobile) {
@@ -40,20 +40,26 @@ interface RouteMapProps {
   loading?: boolean;
 }
 
-// Colored circle div icons (no external image dependencies)
-const makeIcon = (color: string, label?: string) =>
+// Teardrop-shaped pin icons (HERE WeGo style)
+const makePin = (color: string, label?: string) =>
   L.divIcon({
-    className: 'route-map-marker',
-    html: `<div style="background:${color};width:22px;height:22px;border-radius:50%;border:3px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:bold;">${label ?? ''}</div>`,
-    iconSize: [22, 22],
-    iconAnchor: [11, 11],
-    popupAnchor: [0, -12],
+    className: 'route-map-pin',
+    html: `<div style="position:relative;width:32px;height:42px;filter:drop-shadow(0 2px 3px rgba(0,0,0,.35));">
+      <svg viewBox="0 0 32 42" width="32" height="42" xmlns="http://www.w3.org/2000/svg">
+        <path d="M16 0C7.163 0 0 7.163 0 16c0 11 16 26 16 26s16-15 16-26C32 7.163 24.837 0 16 0z" fill="${color}"/>
+        <circle cx="16" cy="16" r="6" fill="#ffffff"/>
+      </svg>
+      ${label ? `<span style="position:absolute;top:8px;left:0;right:0;text-align:center;color:${color};font-size:10px;font-weight:800;">${label}</span>` : ''}
+    </div>`,
+    iconSize: [32, 42],
+    iconAnchor: [16, 42],
+    popupAnchor: [0, -38],
   });
 
-const ICON_START = makeIcon('#10b981');
-const ICON_END = makeIcon('#ef4444');
-const ICON_MID = makeIcon('#2563eb');
-const ICON_WAYPOINT = makeIcon('#8b5cf6', 'W');
+const ICON_START = makePin('#0ea5a5');
+const ICON_END = makePin('#0ea5a5');
+const ICON_MID = makePin('#0ea5a5');
+const ICON_WAYPOINT = makePin('#8b5cf6', 'W');
 
 function FitBounds({ bounds }: { bounds: LatLngBoundsExpression | null }) {
   const map = useMap();
@@ -187,13 +193,6 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
         </div>
         <div className="flex items-center gap-1 flex-wrap justify-end">
           <button
-            onClick={() => openInHereMaps(exportPoints)}
-            title="Abrir rota no HERE WeGo"
-            className="px-2 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white hover:bg-emerald-700 flex items-center gap-1"
-          >
-            <Navigation size={14} /> HERE
-          </button>
-          <button
             onClick={recalcNow}
             title="Recalcular rota agora"
             className="px-2 py-1.5 rounded-lg text-xs font-bold bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-1"
@@ -272,8 +271,8 @@ const RouteMap: React.FC<RouteMapProps> = ({ coordinates, points, onPointsChange
             <ClickToAdd enabled={addMode} onAdd={addWaypoint} />
             {coordinates && coordinates.length > 1 ? (
               <>
-                <Polyline positions={coordinates} pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.9 }} />
-                <Polyline positions={coordinates} pathOptions={{ color: '#dc2626', weight: 6, opacity: 0.95 }} />
+                <Polyline positions={coordinates} pathOptions={{ color: '#ffffff', weight: 10, opacity: 0.95 }} />
+                <Polyline positions={coordinates} pathOptions={{ color: '#1d6cff', weight: 6, opacity: 1 }} />
               </>
             ) : (
               exportPoints.length > 1 && (

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, AlertTriangle, RefreshCw, MapPin, Fuel, DollarSign, Clock, TrendingUp, Map, MessageCircle, Lightbulb, AlertCircle, Target, Truck, FileDown } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, RefreshCw, MapPin, Fuel, DollarSign, Clock, TrendingUp, Map, MessageCircle, Lightbulb, AlertCircle, Target, Truck, FileDown, Navigation } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
-import RouteMap from '@/components/frete/RouteMap';
+import RouteMap, { openInHereMaps } from '@/components/frete/RouteMap';
 import type { ExportPoint } from '@/lib/routeExport';
 import { exportDriverRoutePdf } from '@/lib/tripExport';
 
@@ -254,12 +254,21 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
 
         {/* Interactive Route Map (Leaflet + HERE) */}
         {result.geocodedPoints && result.geocodedPoints.length >= 2 && (
-          <RouteMap
-            coordinates={result.routeCoordinates || []}
-            points={result.geocodedPoints.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }))}
-            onPointsChange={handleMapChange}
-            loading={recalculating}
-          />
+          <div className="space-y-3">
+            <RouteMap
+              coordinates={result.routeCoordinates || []}
+              points={result.geocodedPoints.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }))}
+              onPointsChange={handleMapChange}
+              loading={recalculating}
+            />
+            <button
+              onClick={() => openInHereMaps(result.geocodedPoints!.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng })))}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-bold shadow-lg hover:shadow-xl active:scale-[0.98] transition"
+            >
+              <Navigation size={18} />
+              Compartilhar rota pronta para navegação
+            </button>
+          </div>
         )}
 
         {/* Key Metrics */}
