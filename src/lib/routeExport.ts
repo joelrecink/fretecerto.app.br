@@ -53,6 +53,51 @@ ${placemarks}
   </Document>
 </kml>`;
 }
+export function toGeoJSON(
+  coords: [number, number][],
+  points: ExportPoint[],
+  meta?: { distanceKm?: number; durationHours?: number; axles?: number },
+): string {
+  const features: unknown[] = [];
+  if (coords.length >= 2) {
+    features.push({
+      type: 'Feature',
+      properties: {
+        name: 'Rota FreteCerto',
+        stroke: '#16a34a',
+        'stroke-width': 5,
+        'stroke-opacity': 0.9,
+        distanceKm: meta?.distanceKm,
+        durationHours: meta?.durationHours,
+        axles: meta?.axles,
+      },
+      geometry: {
+        type: 'LineString',
+        coordinates: coords.map(([lat, lng]) => [lng, lat]),
+      },
+    });
+  }
+  points.forEach((p, i) => {
+    const type = i === 0 ? 'origin' : i === points.length - 1 ? 'destination' : 'waypoint';
+    const label = type === 'origin' ? 'Origem' : type === 'destination' ? 'Destino' : `Parada ${i}`;
+    features.push({
+      type: 'Feature',
+      properties: { name: `${label}: ${p.address}`, type },
+      geometry: { type: 'Point', coordinates: [p.lng, p.lat] },
+    });
+  });
+  return JSON.stringify(
+    {
+      type: 'FeatureCollection',
+      generatedAt: new Date().toISOString(),
+      source: 'FreteCerto',
+      features,
+    },
+    null,
+    2,
+  );
+}
+
 
 export function toJSON(coords: [number, number][], points: ExportPoint[]): string {
   return JSON.stringify(
