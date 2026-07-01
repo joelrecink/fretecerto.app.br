@@ -262,7 +262,20 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
               loading={recalculating}
             />
             <button
-              onClick={() => openInHereMaps(result.geocodedPoints!.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng })))}
+              onClick={() => {
+                const base = result.geocodedPoints!.map((p) => ({ address: p.address, lat: p.lat, lng: p.lng }));
+                if (base.length < 2) {
+                  toast.error('Rota incompleta: origem e destino são necessários.');
+                  return;
+                }
+                // Insere waypoints entre origem (0) e destino (último)
+                const origin = base[0];
+                const destination = base[base.length - 1];
+                const middle = base.slice(1, -1);
+                const full: ExportPoint[] = [origin, ...middle, ...driverWaypoints, destination];
+                openInHereMaps(full);
+                toast.success(`Abrindo HERE WeGo com ${full.length} pontos...`);
+              }}
               className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-2xl bg-gradient-to-r from-teal-500 to-emerald-600 text-white font-bold shadow-lg hover:shadow-xl active:scale-[0.98] transition"
             >
               <Navigation size={18} />
