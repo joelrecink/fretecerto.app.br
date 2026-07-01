@@ -830,6 +830,7 @@ const Index = () => {
           onAddPickup={addPickup}
           onRemovePickup={removePickup}
           onUpdatePickup={updatePickup}
+          onSelectPickupAddress={selectPickupAddress}
           onNext={() => setStep('delivery')}
           onBack={() => setStep('costs')}
         />
@@ -840,6 +841,7 @@ const Index = () => {
           onAddDelivery={addDelivery}
           onRemoveDelivery={removeDelivery}
           onUpdateDelivery={updateDelivery}
+          onSelectDeliveryAddress={selectDeliveryAddress}
           onCalculate={() => setStep('summary')}
           onBack={() => setStep('pickup')}
           loading={calculating || routeLoading}
