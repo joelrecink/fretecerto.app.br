@@ -170,6 +170,41 @@ _Calculado com FreteCerto - Seu frete mais lucrativo!_`;
     toast.success('Abrindo WhatsApp para compartilhar...');
   };
 
+  const handleExportDriverPdf = () => {
+    exportDriverRoutePdf({
+      vehicle: {
+        driverName: undefined,
+        licensePlate: undefined,
+        axles: result.vehicleRestrictions?.axles,
+      },
+      originCity: result.originCity,
+      destinationCity: result.destinationCity,
+      geocodedPoints: result.geocodedPoints,
+      waypoints: driverWaypoints,
+      totalDistanceKm: result.totalDistanceKm,
+      totalDurationHours: result.totalDurationHours,
+      totalDurationDays: result.totalDurationDays,
+      estimatedFuelCost: result.estimatedFuelCost,
+      estimatedTollCost: result.estimatedTollCost,
+      driverCommissionCost: result.driverCommissionCost,
+      estimatedMaintenanceCost: result.estimatedMaintenanceCost,
+      estimatedFixedCost: result.estimatedFixedCost,
+      returnCost: result.returnCost,
+      totalFreightIncome: result.totalFreightIncome,
+      netProfit: result.netProfit,
+      viabilityScore: result.viabilityScore,
+      viabilityMessage: result.viabilityMessage,
+      aiAnalysis: result.aiAnalysis,
+      vehicleRestrictions: result.vehicleRestrictions,
+    });
+    toast.success('PDF do roteiro gerado');
+  };
+
+  const handleMapChange = (pts: ExportPoint[], wps: ExportPoint[]) => {
+    setDriverWaypoints(wps);
+    onRecalculateRoute?.(pts, wps);
+  };
+
   
 
   return (
